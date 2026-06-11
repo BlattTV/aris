@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="description" content="Standort-Analyse Coburg – Business-Analyse-Tool für Automaten-Standorte: Attraktionen, Besucherströme, Kundenpotenzial und Umsatzprognose.">
+  <title>Standort-Analyse Coburg · Automaten Business Intelligence</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">📍</span>
+      <div>
+        <h1>Standort-Analyse Coburg</h1>
+        <small>Automaten Business Intelligence · Coburg &amp; Umkreis 30 km</small>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn ghost" id="btn-heatmap" title="Potenzial-Raster über den Kartenausschnitt legen">🔥 Potenzial-Karte</button>
+      <button class="btn" id="btn-suggest" title="Beste freie Standorte im Kartenausschnitt finden">⭐ Beste Standorte finden</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <nav class="tabs">
+        <button class="tab-btn active" data-tab="analyse">📊 Analyse</button>
+        <button class="tab-btn" data-tab="attraktionen">🏛️ Orte</button>
+        <button class="tab-btn" data-tab="automaten">🥤 Automaten</button>
+        <button class="tab-btn" data-tab="dashboard">📈 Dashboard</button>
+        <button class="tab-btn" data-tab="einstellungen">⚙️</button>
+      </nav>
+
+      <!-- Analyse -->
+      <section class="panel active" id="panel-analyse">
+        <div class="control-row">
+          <label>Analyse-Radius <strong id="radius-value">2.0 km</strong></label>
+          <input type="range" id="radius-slider" min="0.3" max="10" step="0.1" value="2">
+        </div>
+        <div id="analysis-result"></div>
+      </section>
+
+      <!-- Attraktionen -->
+      <section class="panel" id="panel-attraktionen">
+        <div class="panel-head">
+          <h3>Attraktionen &amp; Frequenzbringer <span class="badge" id="attractions-count">0</span></h3>
+          <button class="btn tiny" id="btn-add-attraction">+ Auf Karte setzen</button>
+        </div>
+        <ul class="list" id="attractions-list"></ul>
+      </section>
+
+      <!-- Automaten -->
+      <section class="panel" id="panel-automaten">
+        <div class="panel-head">
+          <h3>Automaten-Portfolio</h3>
+          <button class="btn tiny" id="btn-add-machine">+ Automat auf Karte setzen</button>
+        </div>
+        <div class="sub" id="machines-count"></div>
+        <ul class="list" id="machines-list"></ul>
+      </section>
+
+      <!-- Dashboard -->
+      <section class="panel" id="panel-dashboard">
+        <h3>Business-Dashboard</h3>
+        <div class="kpi-grid" id="dash-kpis"></div>
+        <h4>Saisonverlauf Besucherpotenzial (Region)</h4>
+        <canvas id="chart-season" class="chart"></canvas>
+        <h4>Besucher nach Kategorie</h4>
+        <canvas id="chart-cats" class="chart"></canvas>
+        <h4>Standort-Ranking (eigene Automaten)</h4>
+        <ul class="list" id="dash-ranking"></ul>
+        <div class="btn-row">
+          <button class="btn" id="btn-export-csv">⬇️ Portfolio als CSV</button>
+          <button class="btn ghost" id="btn-print">🖨️ Bericht drucken</button>
+        </div>
+      </section>
+
+      <!-- Einstellungen -->
+      <section class="panel" id="panel-einstellungen">
+        <h3>Geschäftsmodell-Parameter</h3>
+        <div class="form-grid">
+          <label>Capture-Rate (% der Passanten)<input type="number" id="set-capture" step="0.1" min="0"></label>
+          <label>Ø Bon je Kauf (€)<input type="number" id="set-ticket" step="0.1" min="0"></label>
+          <label>Marge (%)<input type="number" id="set-margin" step="1" min="0" max="100"></label>
+          <label>Betriebskosten je Automat (€/Monat)<input type="number" id="set-opex" step="10" min="0"></label>
+          <label>Käufe je Einwohner/Jahr<input type="number" id="set-buys" step="1" min="0"></label>
+          <label>Auto-Aktualisierung (Stunden, 0 = aus)<input type="number" id="set-refresh" step="1" min="0"></label>
+          <label class="check"><input type="checkbox" id="set-season"> Saisonfaktor (aktueller Monat) anwenden</label>
+        </div>
+        <button class="btn" id="btn-save-settings">💾 Speichern</button>
+
+        <h3>Datenverwaltung</h3>
+        <div class="sub" id="refresh-status"></div>
+        <div class="btn-row">
+          <button class="btn" id="btn-refresh-now">🔄 Jetzt aktualisieren (OpenStreetMap)</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn ghost" id="btn-export">⬇️ Backup (JSON)</button>
+          <label class="btn ghost file-btn">⬆️ Import<input type="file" id="file-import" accept=".json" hidden></label>
+        </div>
+        <div class="sub">Alle Daten werden lokal im Browser gespeichert (kein Server nötig). Attraktions-POIs werden automatisch über die OpenStreetMap-Overpass-API aktualisiert; Besucherzahlen sind kuratierte bzw. heuristische Schätzwerte.</div>
+      </section>
+    </aside>
+
+    <main id="map"></main>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
