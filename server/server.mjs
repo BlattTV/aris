@@ -22,6 +22,9 @@ import {
   buildGermanyPopulationQuery, parseElements, inBbox, parseBboxParam,
 } from "../js/queries.mjs";
 import { initAuth, handleAuthRoute, getUser, licenseState } from "./auth.mjs";
+import { initPortfolio, handlePortfolioRoute } from "./portfolio.mjs";
+import { initPayments, handlePaymentRoute, paymentsEnabled } from "./payments.mjs";
+import { loadZensus, zensusAvailable, queryZensus } from "./zensus.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, "data");
@@ -33,6 +36,8 @@ const UPDATE_INTERVAL_H = Number(process.env.UPDATE_INTERVAL_H) || 24;
 const TILE_TTL_MS = 24 * 60 * 60 * 1000;
 // Lizenz-Pflicht für die Daten-API (REQUIRE_AUTH=0 zum Deaktivieren, z. B. Demo)
 const REQUIRE_AUTH = process.env.REQUIRE_AUTH !== "0";
+// White-Label: Instanz-Name (erscheint in Titel & Kopfzeile der App)
+const BRAND_NAME = process.env.BRAND_NAME || "";
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -190,30 +195,34 @@ function sendJson(res, status, data, headers = {}) {
   res.end(body);
 }
 
-/** JSON-Body lesen (Limit 64 KB). */
-function readJson(req) {
+/** Rohen Request-Body lesen (für Webhook-Signaturen). */
+function readRaw(req, limit = 65536) {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
     req.on("data", (c) => {
       size += c.length;
-      if (size > 65536) {
+      if (size > limit) {
         reject(Object.assign(new Error("Anfrage zu groß"), { status: 413 }));
         req.destroy();
         return;
       }
       chunks.push(c);
     });
-    req.on("end", () => {
-      if (!chunks.length) return resolve({});
-      try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
-      } catch {
-        reject(Object.assign(new Error("Ungültiges JSON"), { status: 400 }));
-      }
-    });
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
     req.on("error", reject);
   });
+}
+
+/** JSON-Body lesen. */
+async function readJson(req, limit = 65536) {
+  const raw = await readRaw(req, limit);
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw Object.assign(new Error("Ungültiges JSON"), { status: 400 });
+  }
 }
 
 async function serveStatic(req, res, pathname) {
@@ -245,6 +254,9 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, {
         mode: "server",
         authRequired: REQUIRE_AUTH,
+        brand: BRAND_NAME || null,
+        payments: paymentsEnabled(),
+        zensus: zensusAvailable(),
         updatedAt: germany.updatedAt,
         updateRunning,
         machines: germany.machines.length,
@@ -252,6 +264,24 @@ const server = http.createServer(async (req, res) => {
         population: germany.population.length,
         updateIntervalHours: UPDATE_INTERVAL_H,
       });
+    }
+
+    // Zahlungen: Webhook braucht den ROHEN Body (Stripe-Signatur)
+    if (p.startsWith("/api/payments/")) {
+      const raw = req.method === "POST" ? await readRaw(req, 262144) : "";
+      const result = await handlePaymentRoute(p, req, raw, log);
+      if (result) return sendJson(res, result.status, result.body);
+      return sendJson(res, 404, { error: "Unbekannter Endpunkt" });
+    }
+
+    // Portfolio-Sync, Team-Freigaben, Telemetrie
+    if (p.startsWith("/api/portfolio") || p === "/api/telemetry") {
+      const body = ["POST", "PUT"].includes(req.method)
+        ? await readJson(req, 2.5 * 1024 * 1024)
+        : {};
+      const result = await handlePortfolioRoute(p, req, body);
+      if (result) return sendJson(res, result.status, result.body);
+      return sendJson(res, 404, { error: "Unbekannter Endpunkt" });
     }
 
     // Auth-/Admin-Routen (Login, Registrierung, Lizenzverwaltung …)
@@ -284,6 +314,11 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, germany.machines.filter((m) => inBbox(m, bbox)));
       }
       if (p === "/api/population") {
+        // Zensus-Raster (falls importiert) ist präziser als place-Nodes
+        if (zensusAvailable()) {
+          const cells = queryZensus(bbox);
+          if (cells && cells.length) return sendJson(res, 200, cells);
+        }
         return sendJson(res, 200, germany.population.filter((x) => inBbox(x, bbox)));
       }
       // /api/pois: Tile-Cache + regionale POIs aus dem Deutschland-Bestand
@@ -311,7 +346,11 @@ const server = http.createServer(async (req, res) => {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   await loadGermany();
   await initAuth(DATA_DIR, log);
+  initPortfolio(DATA_DIR);
+  initPayments(DATA_DIR);
+  await loadZensus(DATA_DIR, log);
   if (!REQUIRE_AUTH) log("⚠️ REQUIRE_AUTH=0 – Daten-API läuft ohne Lizenzprüfung!");
+  if (!paymentsEnabled()) log("Hinweis: STRIPE_SECRET_KEY nicht gesetzt – Lizenzverkauf per Zahlung deaktiviert.");
   scheduleUpdates();
   server.listen(PORT, HOST, () => {
     log(`Standort-Analyse Deutschland läuft auf http://${HOST}:${PORT}`);

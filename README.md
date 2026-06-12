@@ -55,6 +55,26 @@ mit **gültiger Lizenz** nutzbar. So lassen sich Zugänge verkaufen:
    löschen sowie unbenutzte Schlüssel widerrufen und das Deutschland-
    Datenupdate anstoßen.
 
+**Automatischer Verkauf (Stripe):** `STRIPE_SECRET_KEY` und
+`STRIPE_WEBHOOK_SECRET` setzen (Webhook-Endpunkt in Stripe:
+`https://<domain>/api/payments/webhook`, Event `checkout.session.completed`),
+optional `PUBLIC_URL` und eigene Pläne via `PLANS_JSON`. Kunden sehen dann
+„💳 Lizenz kaufen" im ⚙️-Tab; nach Zahlung wird die Lizenz automatisch
+gutgeschrieben (`/api/payments/history` zeigt dem Admin alle Zahlungen).
+Ohne Stripe-Schlüssel bleibt der manuelle Schlüsselverkauf.
+
+**Telemetrie:** Jeder Nutzer kann im ⚙️-Tab einen API-Token erzeugen.
+Automaten melden Umsätze damit direkt ans Portfolio:
+`POST /api/telemetry` mit Header `X-Api-Key: <token>` und Body
+`{"machineId":"m-…","month":"2026-06","eur":1480}` – Grundlage für
+Auto-Kalibrierung und Forecast.
+
+**Zensus-Raster importieren (optional, empfohlen):** CSV
+„Bevölkerungszahlen in Gitterzellen (100 m)" von zensus2022.de laden, dann
+`node server/import-zensus.mjs /pfad/zensus100m.csv` und Server neu starten.
+`/api/population` liefert dann 1-km-Rasterzellen statt Orts-Mittelpunkten;
+die Analyse bevorzugt Rasterdaten automatisch.
+
 Technik: scrypt-Passwort-Hashes, HttpOnly-Session-Cookies (30 Tage),
 Login-Rate-Limit, Persistenz in `data/users.json`/`licenses.json`/`sessions.json`
 (im Backup des Containers mitsichern!). `REQUIRE_AUTH=0` deaktiviert die
@@ -108,6 +128,14 @@ Logs: `journalctl -u standort-analyse -f` · Status: `systemctl status standort-
 | **Business-Dashboard** | Portfolio-KPIs, Saisonverlauf, Kategorie-Mix, Standort-Ranking, CSV-Export, Druckbericht |
 | **Automatische Datenpflege** | Periodischer POI-Abgleich über die OpenStreetMap-Overpass-API (inkl. bereits kartierter Verkaufsautomaten), konfigurierbares Intervall |
 | **Saisonalität** | Monatsfaktoren je Kategorie (Sambafestival im Juli, Thermen im Winter, Weihnachtsmarkt im Dezember) |
+| **Portfolio-Sync & Team** | Portfolio (Standorte, Events, Einstellungen) wird je Konto serverseitig synchronisiert (Mehrgeräte); lesende Team-Freigaben per E-Mail – Team-Standorte (👥) auf der Karte |
+| **Lizenzverkauf per Stripe** | Optional: Kunde kauft den Plan direkt in der App (Stripe Checkout), der Webhook schreibt die Lizenz automatisch gut |
+| **Veranstaltungskalender** | Events (Festival, Messe, Markt) mit Zeitraum & Besucherzahl – fließen zeitlich begrenzt in die Potenzialrechnung ein |
+| **Telemetrie & Auto-Kalibrierung** | Automaten melden Umsätze per API (X-Api-Key); das Modell kalibriert sich automatisch am Median Ist/Plan |
+| **Zensus-100m-Raster** | Optionaler Import des offenen Zensus-2022-Gitters (EPSG:3035→WGS84, auf 1 km aggregiert) für präzise Einzugsgebiete statt place-Nodes |
+| **Routenoptimierung** | Befüllungstour über die eigenen Standorte (Nearest Neighbour + 2-Opt), mit km, Fahr- und Standzeit auf der Karte |
+| **Umsatz-Forecast** | Lineare Regression über die Monatsumsätze des Portfolios, 6-Monats-Prognose im Dashboard |
+| **White-Label-Profile** | Branchenprofile (Automaten, Foodtrucks, Pop-up-Retail, Werbeflächen, Ladesäulen) mit passenden Default-Parametern; Instanz-Branding via `BRAND_NAME` |
 | **Backup & Import** | Alle Nutzdaten als JSON exportieren/importieren; Persistenz lokal im Browser |
 | **PWA / Android-App** | Offline-fähig, auf dem Smartphone installierbar (s. u.) |
 
@@ -209,24 +237,24 @@ android/                Android-App (WebView), APK via GitHub Actions
 
 ## 🛣️ Roadmap zur Skalierung
 
-Erreicht: ✅ deutschlandweite Abdeckung, ✅ eigener Server mit täglicher
-Datenpflege, ✅ Android-App, ✅ Accounts + Lizenzverkauf + Admin-Oberfläche.
-Nächste Ausbaustufen:
+Erreicht: ✅ deutschlandweite Abdeckung · ✅ Server mit täglicher Datenpflege ·
+✅ Android-App · ✅ Accounts/Lizenzverkauf/Admin · ✅ Portfolio-Sync + Team ·
+✅ Stripe-Checkout · ✅ Events + Telemetrie + Auto-Kalibrierung ·
+✅ Zensus-Raster-Import · ✅ Routenoptimierung · ✅ Umsatz-Forecast ·
+✅ White-Label-Branchenprofile.
 
-1. **Portfolio-Sync** – Automaten/Einstellungen serverseitig je Konto statt
-   localStorage (Mehrgeräte-Sync, Team-Freigaben); bei Wachstum Postgres/
-   PostGIS statt JSON-Dateien. Zahlungsanbindung (Stripe/PayPal) für
-   automatischen Schlüsselversand.
-2. **Echte Frequenzdaten** – Mobilfunk-Bewegungsdaten, Google Popular Times,
-   Veranstaltungskalender und Telemetrie der eigenen Automaten (Verkäufe je
-   Stunde) zur automatischen Modell-Kalibrierung.
-3. **Zensus-Rasterdaten** – 100 m-Bevölkerungsgitter statt place-Nodes für
-   präzisere Einzugsgebiete.
-4. **Routenoptimierung** – Befüllungstouren (TSP) über das eigene Portfolio.
-5. **ML-Forecasting** – Umsatzprognose je Standort aus Ist-Daten
-   (Plan/Ist-Erfassung ist als Trainingsdaten-Grundlage schon eingebaut).
-6. **White-Label/B2B** – das gleiche Modell trägt jedes frequenzbasierte
-   Geschäft: Foodtrucks, Pop-up-Retail, Werbeflächen, Ladesäulen.
+Sinnvolle weitere Stufen:
+
+1. **Skalierung** – Postgres/PostGIS statt JSON-Dateien ab ~10⁴ Konten;
+   Redis-Sessions; mehrere Instanzen hinter Load-Balancer.
+2. **Frequenzdaten-Zukäufe** – kommerzielle Bewegungsdaten (z. B. Mobilfunk-
+   Panels) als zusätzliche Kalibrierungsquelle; Google Popular Times bietet
+   keine offizielle API, Scraping verletzt die Nutzungsbedingungen – deshalb
+   bewusst nicht eingebaut.
+3. **Stündliche Telemetrie** – Verkäufe je Stunde statt Monat für
+   Tagesgang-Modelle und Befüllungs-Vorhersage (API ist erweiterbar).
+4. **Mehr ML** – Gradient-Boosting über Standortmerkmale statt linearer
+   Regression, sobald genug Portfolios Ist-Daten liefern.
 
 ## Datenquellen & Lizenz
 

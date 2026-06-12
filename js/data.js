@@ -130,4 +130,8 @@ export const DEFAULT_SETTINGS = {
   includeOsmMachines: true,
   // Saisonfaktor auf aktuellen Monat anwenden
   applySeasonality: true,
+  // Modell automatisch aus Ist-Umsätzen kalibrieren
+  autoCalibrate: true,
+  // White-Label-Branchenprofil (siehe js/verticals.js)
+  vertical: "automaten",
 };

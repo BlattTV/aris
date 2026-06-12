@@ -8,7 +8,8 @@ import { analyzePoint, scoreGrid, suggestLocations, fmtNum } from "./analysis.js
 import { loadViewport } from "./api.js";
 
 export let map;
-let attractionLayer, machineLayer, analysisLayer, heatLayer, suggestionLayer, popLayer;
+let attractionLayer, machineLayer, analysisLayer, heatLayer, suggestionLayer, popLayer,
+  eventLayer, teamLayer, routeLayer;
 let clickMode = "analyze"; // analyze | addMachine | addAttraction
 let onMapPick = null;
 
@@ -36,11 +37,17 @@ export function initMap() {
   heatLayer = L.layerGroup();
   suggestionLayer = L.layerGroup().addTo(map);
   popLayer = L.layerGroup();
+  eventLayer = L.layerGroup().addTo(map);
+  teamLayer = L.layerGroup().addTo(map);
+  routeLayer = L.layerGroup().addTo(map);
 
   L.control
     .layers(null, {
       "Attraktionen": attractionLayer,
       "Automaten": machineLayer,
+      "Events": eventLayer,
+      "Team": teamLayer,
+      "Tour": routeLayer,
       "Potenzial-Raster": heatLayer,
       "Bevölkerung": popLayer,
       "Standort-Vorschläge": suggestionLayer,
@@ -61,6 +68,8 @@ export function initMap() {
   renderAttractions();
   renderMachines();
   renderPopulation();
+  renderEvents();
+  renderTeam();
 
   subscribe((topic) => {
     if (["attractions", "data:merged", "import"].includes(topic)) renderAttractions();
@@ -69,6 +78,11 @@ export function initMap() {
       if (state.selection) renderAnalysis();
     }
     if (topic === "data:merged") renderPopulation();
+    if (["events", "import"].includes(topic)) {
+      renderEvents();
+      if (state.selection) renderAnalysis();
+    }
+    if (topic === "team") renderTeam();
     if (topic === "selection" || topic === "settings") renderAnalysis();
   });
 
@@ -142,6 +156,69 @@ function renderPopulation() {
       .bindTooltip(`${p.name}: ${fmtNum(p.pop)} Einwohner`)
       .addTo(popLayer);
   }
+}
+
+export function renderEvents() {
+  eventLayer.clearLayers();
+  const today = new Date().toISOString().slice(0, 10);
+  for (const ev of state.events) {
+    const active = today >= ev.from && today <= ev.to;
+    const icon = L.divIcon({
+      className: "event-icon",
+      html: `<div class="event-pin${active ? " active" : ""}">📅</div>`,
+      iconSize: [28, 28],
+      iconAnchor: [14, 14],
+    });
+    L.marker([ev.lat, ev.lng], { icon })
+      .bindPopup(`
+        <strong>📅 ${ev.name}</strong><br>
+        ${ev.from} bis ${ev.to} ${active ? "· <strong>läuft gerade</strong>" : ""}<br>
+        Erwartete Besucher: ${fmtNum(ev.visitors)}<br>
+        <button class="popup-btn" data-analyze="${ev.lat},${ev.lng}">📍 Hier analysieren</button>
+      `)
+      .addTo(eventLayer);
+  }
+}
+
+export function renderTeam() {
+  teamLayer.clearLayers();
+  for (const m of state.teamMachines) {
+    const icon = L.divIcon({
+      className: "machine-icon",
+      html: `<div class="machine-pin team">👥</div>`,
+      iconSize: [30, 30],
+      iconAnchor: [15, 15],
+    });
+    L.marker([m.lat, m.lng], { icon })
+      .bindPopup(`
+        <strong>👥 ${m.name}</strong><br>
+        Team-Standort von ${m.owner}<br>
+        <button class="popup-btn" data-analyze="${m.lat},${m.lng}">📍 Standort analysieren</button>
+      `)
+      .addTo(teamLayer);
+  }
+}
+
+/** Geplante Befüllungstour einzeichnen. */
+export function renderRoute(route) {
+  routeLayer.clearLayers();
+  if (!route) return;
+  const latlngs = [...route.order.map((p) => [p.lat, p.lng]), [route.order[0].lat, route.order[0].lng]];
+  L.polyline(latlngs, { color: "#f59e0b", weight: 3, dashArray: "8 6" }).addTo(routeLayer);
+  route.order.forEach((p, i) => {
+    if (p.isStart) return;
+    const icon = L.divIcon({
+      className: "route-icon",
+      html: `<div class="route-stop">${i}</div>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    });
+    L.marker([p.lat, p.lng], { icon }).bindTooltip(`Stopp ${i}: ${p.name}`).addTo(routeLayer);
+  });
+  const start = route.order[0];
+  L.marker([start.lat, start.lng], {
+    icon: L.divIcon({ className: "route-icon", html: `<div class="route-stop start">🏁</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
+  }).bindTooltip("Start/Depot").addTo(routeLayer);
 }
 
 export function renderAnalysis() {

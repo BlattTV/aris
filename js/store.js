@@ -11,7 +11,9 @@ const listeners = new Set();
 
 export const state = {
   attractions: [],        // Seed + Overpass + manuell
-  machines: [],           // {id, name, lat, lng, type, monthlySalesEur?, owner, installedAt, isCompetitor}
+  machines: [],           // {id, name, lat, lng, type, salesHistory?, owner, installedAt, isCompetitor}
+  events: [],             // {id, name, lat, lng, from, to, visitors} – Veranstaltungskalender
+  teamMachines: [],       // Standorte aus mit mir geteilten Portfolios (lesend)
   settings: { ...DEFAULT_SETTINGS },
   selection: null,        // {lat, lng} aktueller Analysepunkt
   lastRefresh: null,      // ISO-Zeitstempel der letzten Datenaktualisierung
@@ -38,6 +40,7 @@ export function load() {
     if (raw) {
       const saved = JSON.parse(raw);
       state.machines = saved.machines || [];
+      state.events = saved.events || [];
       state.settings = { ...DEFAULT_SETTINGS, ...(saved.settings || {}) };
       state.lastRefresh = saved.lastRefresh || null;
       state.hiddenOsmIds = saved.hiddenOsmIds || [];
@@ -52,23 +55,86 @@ export function load() {
   }
 }
 
+// Hook für den Portfolio-Sync: wird nach jedem persist() aufgerufen
+let persistHook = null;
+export function setPersistHook(fn) {
+  persistHook = fn;
+}
+
 export function persist() {
   // Massendaten (POIs, OSM-Automaten, Bevölkerung) werden bewusst nicht
   // persistiert – sie kommen je Kartenausschnitt frisch vom Server/Overpass.
   const data = {
     machines: state.machines,
+    events: state.events,
     settings: state.settings,
     lastRefresh: state.lastRefresh,
     hiddenOsmIds: state.hiddenOsmIds,
     customAttractions: state.attractions.filter((a) => a.source === "manuell"),
   };
   localStorage.setItem(LS_KEY, JSON.stringify(data));
+  if (persistHook) persistHook();
+}
+
+/** Portfolio-Dokument für den Server-Sync (alles Nutzereigene). */
+export function buildPortfolioDoc() {
+  return {
+    machines: state.machines,
+    events: state.events,
+    settings: state.settings,
+    hiddenOsmIds: state.hiddenOsmIds,
+    customAttractions: state.attractions.filter((a) => a.source === "manuell"),
+  };
+}
+
+/** Server-Portfolio übernehmen (ohne erneuten Sync-Push auszulösen). */
+export function applyPortfolioDoc(doc) {
+  const hook = persistHook;
+  persistHook = null;
+  try {
+    if (Array.isArray(doc.machines)) state.machines = doc.machines;
+    if (Array.isArray(doc.events)) state.events = doc.events;
+    if (doc.settings) state.settings = { ...DEFAULT_SETTINGS, ...doc.settings };
+    if (Array.isArray(doc.hiddenOsmIds)) state.hiddenOsmIds = doc.hiddenOsmIds;
+    if (Array.isArray(doc.customAttractions)) {
+      state.attractions = state.attractions.filter((a) => a.source !== "manuell");
+      state.attractions.push(...doc.customAttractions.map((a) => ({ ...a, source: "manuell" })));
+    }
+    persist();
+    notify("import");
+  } finally {
+    persistHook = hook;
+  }
+}
+
+// --- Events (Veranstaltungskalender) ---
+
+export function addEvent(ev) {
+  const item = {
+    id: "e-" + Date.now().toString(36),
+    name: ev.name,
+    lat: ev.lat,
+    lng: ev.lng,
+    from: ev.from,
+    to: ev.to,
+    visitors: Number(ev.visitors) || 1000,
+  };
+  state.events.push(item);
+  persist();
+  notify("events");
+  return item;
+}
+
+export function removeEvent(id) {
+  state.events = state.events.filter((e) => e.id !== id);
+  persist();
+  notify("events");
 }
 
 // Obergrenzen gegen Speicherwachstum bei langen Sitzungen quer durch Deutschland
 const MAX_POIS = 8000;
 const MAX_OSM_MACHINES = 8000;
-const MAX_POPULATION = 6000;
+const MAX_POPULATION = 16000;
 
 /**
  * Viewport-Daten deduplizierend in den Store übernehmen
@@ -97,10 +163,21 @@ export function mergeFetched({ pois = [], machines = [], population = [] }) {
   if (state.osmMachines.length > MAX_OSM_MACHINES)
     state.osmMachines = state.osmMachines.slice(-MAX_OSM_MACHINES);
 
+  const zensusIds = new Set(
+    state.populationCenters.filter((x) => x.source === "zensus").map((x) => x.id)
+  );
   for (const p of population) {
-    if (!state.populationCenters.some(
-      (x) => haversineKm(p.lat, p.lng, x.lat, x.lng) < 1.0
-    )) state.populationCenters.push(p);
+    if (p.source === "zensus") {
+      // Rasterzellen liegen planmäßig dicht – nur per Zell-ID deduplizieren
+      if (!zensusIds.has(p.id)) {
+        state.populationCenters.push(p);
+        zensusIds.add(p.id);
+      }
+    } else if (!state.populationCenters.some(
+      (x) => x.source !== "zensus" && haversineKm(p.lat, p.lng, x.lat, x.lng) < 1.0
+    )) {
+      state.populationCenters.push(p);
+    }
   }
   if (state.populationCenters.length > MAX_POPULATION)
     state.populationCenters = state.populationCenters.slice(-MAX_POPULATION);

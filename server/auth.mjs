@@ -181,6 +181,50 @@ async function redeemKey(user, key) {
   return lic;
 }
 
+/**
+ * Lizenz direkt vergeben (z. B. nach Zahlungseingang): verlängert den
+ * Nutzer und legt zur Buchführung einen bereits eingelösten Schlüssel an.
+ */
+export async function grantLicense(userId, plan, durationDays, note) {
+  const user = users.find((u) => u.id === userId);
+  if (!user) throw httpError(404, "Nutzer unbekannt");
+  const base = user.licenseValidUntil && Date.parse(user.licenseValidUntil) > Date.now()
+    ? Date.parse(user.licenseValidUntil)
+    : Date.now();
+  user.licenseValidUntil = new Date(base + durationDays * 86400000).toISOString();
+  user.licensePlan = plan;
+  licenses.push({
+    key: generateLicenseKey(), plan, durationDays, note: note || "automatisch (Zahlung)",
+    createdAt: new Date().toISOString(),
+    usedBy: user.id, usedAt: new Date().toISOString(), revoked: false,
+  });
+  await saveUsers();
+  await saveLicenses();
+  return user;
+}
+
+/** Nutzer anhand seines Telemetrie-API-Tokens finden. */
+export function getUserByApiToken(token) {
+  if (!token) return null;
+  const user = users.find((u) => u.apiToken && u.apiToken === token);
+  return user && user.active ? user : null;
+}
+
+/** Nutzer per ID (für Portfolio-Freigaben). */
+export function getUserById(id) {
+  return users.find((u) => u.id === id) || null;
+}
+
+export function getUserByEmail(email) {
+  return users.find((u) => u.email === String(email || "").toLowerCase().trim()) || null;
+}
+
+async function rotateApiToken(user) {
+  user.apiToken = "sat_" + crypto.randomBytes(24).toString("hex");
+  await saveUsers();
+  return user.apiToken;
+}
+
 // ---------- Hilfen ----------
 
 function httpError(status, message) {
@@ -276,6 +320,13 @@ export async function handleAuthRoute(p, req, body) {
     if (!user) throw httpError(401, "Nicht angemeldet");
     const lic = await redeemKey(user, body.licenseKey);
     return { status: 200, body: { ...publicUser(user), redeemed: { plan: lic.plan, durationDays: lic.durationDays } } };
+  }
+
+  if (p === "/api/auth/token" && req.method === "POST") {
+    const user = getUser(req);
+    if (!user) throw httpError(401, "Nicht angemeldet");
+    const token = await rotateApiToken(user);
+    return { status: 200, body: { apiToken: token } };
   }
 
   if (p === "/api/auth/password" && req.method === "POST") {

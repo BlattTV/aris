@@ -6,11 +6,15 @@ import { CATEGORIES, SEASONALITY } from "./data.js";
 import {
   state, allAttractions, allMachines, subscribe, notify,
   addMachine, updateMachine, removeMachine, restoreHiddenOsmMachines,
-  addAttraction, removeAttraction,
+  addAttraction, removeAttraction, addEvent, removeEvent,
   updateSettings, exportJson, importJson,
 } from "./store.js";
-import { analyzePoint, haversineKm, fmtNum, fmtEur } from "./analysis.js";
-import { setClickMode, renderHeatmap, renderSuggestions, map } from "./map.js";
+import { analyzePoint, computeCalibration, haversineKm, fmtNum, fmtEur } from "./analysis.js";
+import { setClickMode, renderHeatmap, renderSuggestions, renderRoute, map } from "./map.js";
+import { planRoute } from "./route.js";
+import { portfolioForecast } from "./forecast.js";
+import { VERTICALS, applyVertical, updateVerticalLabels, unit } from "./verticals.js";
+import { shareWith, unshareWith, mySharedWith, loadTeamMachines, syncActive } from "./sync.js";
 import { refreshNow, scheduleAutoRefresh, getMode, getServerStatus, geocode, loadViewport } from "./api.js";
 import { getUserInfo, logout, redeemLicense, changePassword, showAuthOverlay } from "./auth.js";
 import { barChart, donut } from "./charts.js";
@@ -29,8 +33,9 @@ export function initUi() {
   subscribe((topic) => {
     if (topic === "selection" || topic === "settings" || topic === "machines")
       renderAnalysisPanel();
-    if (["attractions", "data:merged", "import"].includes(topic))
+    if (["attractions", "data:merged", "import", "events"].includes(topic))
       renderAttractionsPanel();
+    if (["events", "import"].includes(topic)) renderDashboard();
     if (["machines", "import", "data:merged"].includes(topic)) renderMachinesPanel();
     if (["machines", "settings", "data:merged", "import", "selection"].includes(topic))
       renderDashboard();
@@ -151,6 +156,37 @@ function textReport(r) {
 // ---------- Panel: Attraktionen ----------
 
 function renderAttractionsPanel() {
+  // Veranstaltungen
+  const today = new Date().toISOString().slice(0, 10);
+  $("#events-count").textContent = state.events.length;
+  $("#events-list").innerHTML = state.events
+    .slice()
+    .sort((a, b) => a.from.localeCompare(b.from))
+    .map((ev) => {
+      const active = today >= ev.from && today <= ev.to;
+      const past = today > ev.to;
+      return `<li class="card" data-goto="${ev.lat},${ev.lng}">
+        <div class="card-head">
+          <strong>📅 ${ev.name}</strong>
+          ${active ? '<span class="badge ok">läuft</span>' : past ? '<span class="badge">vorbei</span>' : '<span class="badge warn">geplant</span>'}
+          <button class="del" data-del-event="${ev.id}" title="Löschen">✕</button>
+        </div>
+        <small>${ev.from} – ${ev.to} · ${fmtNum(ev.visitors)} erwartete Besucher</small>
+      </li>`;
+    }).join("") || `<li class="hint">Keine Events erfasst. Events (Festivals, Märkte, Messen) erhöhen das Potenzial im Zeitraum.</li>`;
+  $("#events-list").querySelectorAll("[data-del-event]").forEach((b) =>
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (confirm("Event löschen?")) removeEvent(b.dataset.delEvent);
+    })
+  );
+  $("#events-list").querySelectorAll("[data-goto]").forEach((li) =>
+    li.addEventListener("click", () => {
+      const [lat, lng] = li.dataset.goto.split(",").map(Number);
+      map.setView([lat, lng], 14);
+    })
+  );
+
   const list = allAttractions().slice().sort((a, b) => b.visitors - a.visitors);
   $("#attractions-list").innerHTML = list.map((a) => {
     const cat = CATEGORIES[a.cat] || CATEGORIES.freizeit;
@@ -212,9 +248,9 @@ function renderMachinesPanel() {
         <button class="del" data-del-machine="${m.id}" title="${fromOsm ? "Aus Berechnung ausblenden" : "Löschen"}">✕</button>
       </div>
       <small>${m.type}${fromOsm ? (m.operator ? " · " + m.operator : "") : " · seit " + m.installedAt} · Score ${r.score}/100${fromOsm ? "" : " · Prognose " + fmtEur(r.revenueYear) + "/Jahr"}</small>
-      ${m.monthlySalesEur ? `<small>Ist-Umsatz: ${fmtNum(m.monthlySalesEur)} €/Monat ${istVsPlan(m, r)}</small>` : ""}
+      ${m.monthlySalesEur ? `<small>Ist-Umsatz: ${fmtNum(m.monthlySalesEur)} €/Monat ${istVsPlan(m, r)}${m.salesHistory?.length ? ` · ${m.salesHistory.length} Monate Historie` : ""}</small>` : ""}
       ${fromOsm ? "" : `<div class="btn-row">
-        <button class="btn tiny ghost" data-edit-machine="${m.id}">✏️ Ist-Umsatz erfassen</button>
+        <button class="btn tiny ghost" data-edit-machine="${m.id}">📈 Umsätze erfassen</button>
       </div>`}
     </li>`;
   }).join("") || `<li class="hint">Noch keine Automaten erfasst. Nutze „+ Automat auf Karte setzen" oder „🔄 Jetzt aktualisieren" in den Einstellungen, um Automaten aus OpenStreetMap/farmshops zu laden.</li>`;
@@ -233,8 +269,24 @@ function renderMachinesPanel() {
     b.addEventListener("click", (e) => {
       e.stopPropagation();
       const m = state.machines.find((x) => x.id === b.dataset.editMachine);
-      const v = prompt(`Ist-Umsatz für „${m.name}" (€/Monat):`, m.monthlySalesEur || "");
-      if (v !== null) updateMachine(m.id, { monthlySalesEur: Number(v) || null });
+      const current = (m.salesHistory || [])
+        .map((h) => `${h.month}=${h.eur}`).join(", ");
+      const v = prompt(
+        `Monatsumsätze für „${m.name}" – Format: JJJJ-MM=EURO, kommagetrennt.\n` +
+        `(Telemetrie-Anbindung: POST /api/telemetry, Token in den Einstellungen)`,
+        current || new Date().toISOString().slice(0, 7) + "="
+      );
+      if (v === null) return;
+      const salesHistory = v.split(",")
+        .map((s) => s.trim().match(/^(\d{4}-\d{2})\s*=\s*([\d.,]+)$/))
+        .filter(Boolean)
+        .map((mt) => ({ month: mt[1], eur: Number(mt[2].replace(",", ".")) }))
+        .filter((h) => isFinite(h.eur))
+        .sort((a, b) => a.month.localeCompare(b.month));
+      updateMachine(m.id, {
+        salesHistory,
+        monthlySalesEur: salesHistory.length ? salesHistory[salesHistory.length - 1].eur : null,
+      });
     })
   );
   $("#machines-list").querySelectorAll("[data-goto]").forEach((li) =>
@@ -302,6 +354,34 @@ function renderDashboard() {
   const c2 = $("#chart-cats");
   if (c2.clientWidth) donut(c2, segs);
 
+  // Forecast aus Ist-Daten + Kalibrierungsstatus
+  const fc = portfolioForecast(own);
+  const cal = computeCalibration();
+  const calText = cal.samples
+    ? `Modell-Kalibrierung aktiv: Faktor ${cal.factor.toFixed(2)} aus ${cal.samples} Standort(en) mit Ist-Daten.`
+    : "Noch keine Kalibrierung – Ist-Umsätze bei den Standorten erfassen (📈), dann passt sich das Modell automatisch an.";
+  if (fc) {
+    const all = [...fc.actual, ...fc.forecast];
+    const c3 = $("#chart-forecast");
+    if (c3.clientWidth) {
+      barChart(c3,
+        all.map((x) => x.month.slice(2).replace("-", "/")),
+        all.map((x) => x.eur),
+        {
+          colors: all.map((_, i) => (i < fc.actual.length ? "#22d3ee" : "#f59e0b")),
+          format: (v) => fmtNum(v) + " €",
+        });
+    }
+    $("#forecast-info").textContent =
+      `Trend: ${fc.trendPctPerMonth >= 0 ? "+" : ""}${fc.trendPctPerMonth.toFixed(1)} %/Monat · ` +
+      `Prognose nächste ${fc.forecast.length} Monate (orange): ${fmtEur(fc.forecast.reduce((s, x) => s + x.eur, 0))}. ${calText}`;
+  } else {
+    $("#forecast-info").textContent =
+      "Für den Forecast mindestens 2 Monatsumsätze erfassen (📈 bei den eigenen Standorten oder per Telemetrie-API). " + calText;
+    const c3 = $("#chart-forecast");
+    if (c3.clientWidth) c3.getContext("2d").clearRect(0, 0, c3.width, c3.height);
+  }
+
   // Ranking eigener Standorte
   const ranked = own
     .map((m) => ({ m, r: analyzePoint(m.lat, m.lng) }))
@@ -340,11 +420,47 @@ function renderAccountSection() {
       <div class="lic">${user.email} · Lizenz: ${lic.valid ? `✅ ${lic.plan || "aktiv"} bis ${until}` : `❌ ${lic.reason || "ungültig"}`}</div>
       <div class="btn-row">
         ${user.role === "admin" ? `<a class="btn tiny" href="admin.html">🛠️ Admin-Oberfläche</a>` : ""}
+        ${getServerStatus()?.payments ? `<button class="btn tiny" id="btn-buy">💳 Lizenz kaufen</button>` : ""}
         <button class="btn tiny ghost" id="btn-redeem">🎟️ Lizenzschlüssel einlösen</button>
+        <button class="btn tiny ghost" id="btn-token">🔌 Telemetrie-Token</button>
         <button class="btn tiny ghost" id="btn-passwd">🔒 Passwort ändern</button>
         <button class="btn tiny ghost" id="btn-logout">🚪 Abmelden</button>
       </div>
     </div>`;
+  $("#btn-buy")?.addEventListener("click", async () => {
+    try {
+      const res = await fetch("api/payments/plans");
+      const { plans } = await res.json();
+      const choice = prompt(
+        "Plan wählen (Nummer eingeben):\n" +
+        plans.map((pl, i) => `${i + 1}) ${pl.label} – ${pl.eur.toFixed(2).replace(".", ",")} €`).join("\n")
+      );
+      const plan = plans[Number(choice) - 1];
+      if (!plan) return;
+      const co = await fetch("api/payments/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId: plan.id }),
+      });
+      const data = await co.json();
+      if (!co.ok) throw new Error(data.error || "Checkout fehlgeschlagen");
+      location.href = data.url; // weiter zu Stripe
+    } catch (e) {
+      alert("Fehler: " + e.message);
+    }
+  });
+  $("#btn-token").addEventListener("click", async () => {
+    if (!confirm("Neuen Telemetrie-API-Token erzeugen? Ein vorhandener Token wird ungültig.")) return;
+    const res = await fetch("api/auth/token", { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) return alert("Fehler: " + (data.error || res.status));
+    prompt(
+      "Dein API-Token (jetzt kopieren – Automaten senden Umsätze damit):\n\n" +
+      'curl -X POST <server>/api/telemetry -H "X-Api-Key: <TOKEN>" ' +
+      '-H "Content-Type: application/json" -d \'{"machineId":"m-…","month":"2026-06","eur":1234}\'',
+      data.apiToken
+    );
+  });
   $("#btn-redeem").addEventListener("click", async () => {
     const key = prompt("Lizenzschlüssel (SA-XXXX-…):");
     if (!key) return;
@@ -373,6 +489,46 @@ function renderAccountSection() {
   });
 }
 
+async function renderTeamSection() {
+  const el = $("#team-section");
+  if (!el) return;
+  if (getMode() !== "server" || !getUserInfo() || !syncActive()) {
+    el.innerHTML = "";
+    return;
+  }
+  const shares = await mySharedWith();
+  el.innerHTML = `
+    <h3>👥 Team-Freigaben</h3>
+    <div class="sub">Dein Portfolio wird lesend geteilt mit:
+      ${shares.length ? shares.map((s) => `<span class="badge">${s.email} <a href="#" data-unshare="${s.email}">✕</a></span>`).join(" ") : "niemandem"}.
+      Team-Standorte (👥) erscheinen auf deiner Karte, wenn andere ihr Portfolio mit dir teilen.</div>
+    <div class="btn-row">
+      <button class="btn tiny ghost" id="btn-share">+ Mit Konto teilen</button>
+      <button class="btn tiny ghost" id="btn-load-team">🔄 Team-Standorte laden (${state.teamMachines.length})</button>
+    </div>`;
+  $("#btn-share").addEventListener("click", async () => {
+    const email = prompt("E-Mail des Team-Mitglieds (muss ein Konto haben):");
+    if (!email) return;
+    try {
+      await shareWith(email.trim());
+      renderTeamSection();
+    } catch (e) {
+      alert("Fehler: " + e.message);
+    }
+  });
+  $("#btn-load-team").addEventListener("click", async () => {
+    const n = await loadTeamMachines();
+    alert(n ? `${n} Team-Standorte geladen (👥 auf der Karte).` : "Niemand teilt aktuell ein Portfolio mit dir.");
+    renderTeamSection();
+  });
+  el.querySelectorAll("[data-unshare]").forEach((a) =>
+    a.addEventListener("click", async (e) => {
+      e.preventDefault();
+      await unshareWith(a.dataset.unshare);
+      renderTeamSection();
+    }));
+}
+
 function renderSettingsPanel() {
   renderAccountSection();
   const s = state.settings;
@@ -384,6 +540,10 @@ function renderSettingsPanel() {
   $("#set-refresh").value = s.autoRefreshHours;
   $("#set-season").checked = s.applySeasonality;
   $("#set-osm-machines").checked = s.includeOsmMachines;
+  $("#set-vertical").value = s.vertical || "automaten";
+  $("#set-calibrate").checked = s.autoCalibrate !== false;
+  updateVerticalLabels();
+  renderTeamSection();
 
   const srv = getServerStatus();
   const modeLine =
@@ -425,6 +585,58 @@ function bindGlobalActions() {
     alert("Klicke nun auf die Karte, um die Position der Attraktion festzulegen.");
   });
 
+  $("#btn-add-event").addEventListener("click", () => {
+    setClickMode("addEvent", (latlng) => {
+      const name = prompt("Name des Events (Festival, Markt, Messe …):");
+      if (!name) return;
+      const from = prompt("Beginn (JJJJ-MM-TT):", new Date().toISOString().slice(0, 10));
+      const to = prompt("Ende (JJJJ-MM-TT):", from);
+      const visitors = prompt("Erwartete Besucher gesamt:", "10000");
+      if (!from || !to) return;
+      addEvent({ name, lat: latlng.lat, lng: latlng.lng, from, to, visitors });
+    });
+    alert("Klicke nun auf die Karte, um den Veranstaltungsort festzulegen.");
+  });
+
+  $("#btn-plan-route").addEventListener("click", () => {
+    const own = state.machines.filter((m) => !m.isCompetitor);
+    if (own.length < 2) {
+      alert(`Mindestens 2 eigene ${unit()}e nötig. Tipp: Startpunkt vorher per Klick auf die Karte wählen (Analyse-Pin = Depot).`);
+      return;
+    }
+    const start = state.selection || { lat: own[0].lat, lng: own[0].lng };
+    const route = planRoute(own, start);
+    renderRoute(route);
+    map.fitBounds(route.order.map((p) => [p.lat, p.lng]), { padding: [40, 40] });
+    $("#btn-clear-route").style.display = "";
+    $("#route-summary").innerHTML = `
+      <div class="account-card">
+        <div class="who">🚚 Tour über ${own.length} Stopps</div>
+        <div class="lic">${fmtNum(route.distanceKm, 1)} km · Fahrzeit ~${fmtNum(route.driveMin)} min ·
+        Standzeit ~${fmtNum(route.serviceMin)} min · gesamt ~${fmtNum(route.totalMin / 60, 1)} h</div>
+        <ol style="margin:4px 0 0 18px;padding:0;font-size:11.5px;color:var(--muted)">
+          ${route.order.filter((p) => !p.isStart).map((p) => `<li>${p.name}</li>`).join("")}
+        </ol>
+      </div>`;
+  });
+
+  $("#btn-clear-route").addEventListener("click", () => {
+    renderRoute(null);
+    $("#route-summary").innerHTML = "";
+    $("#btn-clear-route").style.display = "none";
+  });
+
+  $("#set-vertical").addEventListener("change", (e) => {
+    const v = VERTICALS[e.target.value];
+    const applyDefaults = confirm(
+      `Branchenprofil „${v.label}" aktivieren.\n\nOK = empfohlene Parameter übernehmen ` +
+      `(Capture ${v.defaults.captureRatePct} %, Ø Bon ${v.defaults.avgTicketEur} €, ` +
+      `Kosten ${v.defaults.opexPerMachineMonth} €/Monat)\nAbbrechen = nur Begriffe ändern`
+    );
+    applyVertical(e.target.value, applyDefaults);
+    renderSettingsPanel();
+  });
+
   $("#btn-heatmap").addEventListener("click", () => {
     $("#btn-heatmap").disabled = true;
     setTimeout(() => {
@@ -452,6 +664,7 @@ function bindGlobalActions() {
       autoRefreshHours: Number($("#set-refresh").value),
       applySeasonality: $("#set-season").checked,
       includeOsmMachines: $("#set-osm-machines").checked,
+      autoCalibrate: $("#set-calibrate").checked,
     });
     scheduleAutoRefresh(() => map.getBounds());
     alert("Einstellungen gespeichert.");

@@ -2,7 +2,7 @@
  * Leichtgewichtige Canvas-Charts (ohne externe Abhängigkeit, offline-fähig).
  */
 
-export function barChart(canvas, labels, values, { color = "#22d3ee", format = (v) => v } = {}) {
+export function barChart(canvas, labels, values, { color = "#22d3ee", colors = null, format = (v) => v } = {}) {
   const ctx = canvas.getContext("2d");
   const dpr = window.devicePixelRatio || 1;
   const W = canvas.clientWidth, H = canvas.clientHeight;
@@ -22,7 +22,7 @@ export function barChart(canvas, labels, values, { color = "#22d3ee", format = (
     const h = ((H - pad.t - pad.b) * v) / max;
     const x = pad.l + i * cw + cw * 0.15;
     const y = H - pad.b - h;
-    ctx.fillStyle = color;
+    ctx.fillStyle = colors ? colors[i] || color : color;
     ctx.globalAlpha = 0.85;
     ctx.beginPath();
     ctx.roundRect(x, y, cw * 0.7, h, 3);

@@ -55,6 +55,11 @@
       <!-- Attraktionen -->
       <section class="panel" id="panel-attraktionen">
         <div class="panel-head">
+          <h3>📅 Veranstaltungen <span class="badge" id="events-count">0</span></h3>
+          <button class="btn tiny" id="btn-add-event">+ Event auf Karte setzen</button>
+        </div>
+        <ul class="list" id="events-list"></ul>
+        <div class="panel-head">
           <h3>Attraktionen &amp; Frequenzbringer <span class="badge" id="attractions-count">0</span></h3>
           <button class="btn tiny" id="btn-add-attraction">+ Auf Karte setzen</button>
         </div>
@@ -64,9 +69,14 @@
       <!-- Automaten -->
       <section class="panel" id="panel-automaten">
         <div class="panel-head">
-          <h3>Automaten-Portfolio</h3>
-          <button class="btn tiny" id="btn-add-machine">+ Automat auf Karte setzen</button>
+          <h3><span data-term="unit">Automat</span>en-Portfolio</h3>
+          <button class="btn tiny" id="btn-add-machine">+ <span data-term="unit">Automat</span> auf Karte setzen</button>
         </div>
+        <div class="btn-row">
+          <button class="btn tiny ghost" id="btn-plan-route">🚚 Befüllungstour planen</button>
+          <button class="btn tiny ghost" id="btn-clear-route" style="display:none">✕ Tour ausblenden</button>
+        </div>
+        <div id="route-summary"></div>
         <div class="sub" id="machines-count"></div>
         <ul class="list" id="machines-list"></ul>
       </section>
@@ -79,7 +89,10 @@
         <canvas id="chart-season" class="chart"></canvas>
         <h4>Besucher nach Kategorie</h4>
         <canvas id="chart-cats" class="chart"></canvas>
-        <h4>Standort-Ranking (eigene Automaten)</h4>
+        <h4>📈 Umsatz-Forecast (aus Ist-Daten)</h4>
+        <div class="sub" id="forecast-info"></div>
+        <canvas id="chart-forecast" class="chart"></canvas>
+        <h4>Standort-Ranking (eigene <span data-term="units">Automaten</span>)</h4>
         <ul class="list" id="dash-ranking"></ul>
         <div class="btn-row">
           <button class="btn" id="btn-export-csv">⬇️ Portfolio als CSV</button>
@@ -90,6 +103,20 @@
       <!-- Einstellungen -->
       <section class="panel" id="panel-einstellungen">
         <div id="account-section"></div>
+        <div id="team-section"></div>
+        <h3>Branchenprofil (White-Label)</h3>
+        <div class="form-grid">
+          <label>Geschäftsmodell
+            <select id="set-vertical">
+              <option value="automaten">🥤 Verkaufsautomaten</option>
+              <option value="foodtruck">🚚 Foodtrucks</option>
+              <option value="popup">🏬 Pop-up-Retail</option>
+              <option value="werbung">📢 Werbeflächen</option>
+              <option value="ladesaeule">⚡ E-Ladesäulen</option>
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" id="set-calibrate"> Modell automatisch aus Ist-Umsätzen kalibrieren</label>
+        </div>
         <h3>Geschäftsmodell-Parameter</h3>
         <div class="form-grid">
           <label>Capture-Rate (% der Passanten)<input type="number" id="set-capture" step="0.1" min="0"></label>
