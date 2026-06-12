@@ -67,15 +67,29 @@ Der Standort-Score (0–100) skaliert logarithmisch; 30 Kunden/Tag ≈ 100 Punkt
 > bzw. Heuristiken je POI-Typ – ein Prognosewerkzeug, kein Ersatz für
 > Vor-Ort-Frequenzmessung.
 
-## 🔄 Automatische Datenaktualisierung
+## 🔄 Automatische Datenaktualisierung (inkl. farmshops.eu-Daten)
 
 - POIs (Museen, Freizeitparks, Bäder, Arenen, Einkaufszentren, Kinos …) werden
   über die **Overpass-API** im 30-km-Umkreis von Coburg geladen und mit
   heuristischen Besucherzahlen versehen.
-- Bereits in OSM kartierte **Verkaufsautomaten** (Snack/Getränke) werden erkannt.
-- Intervall in den Einstellungen konfigurierbar (Standard: alle 24 h, beim
-  App-Start wird die Fälligkeit geprüft). Manuell: „🔄 Jetzt aktualisieren".
-- Kuratierte Attraktionen werden bei Namensgleichheit nicht dupliziert.
+- **farmshops.eu-Datenmodell integriert**: farmshops.eu ist selbst nur eine
+  Aufbereitung von OpenStreetMap-Daten
+  ([Quellcode](https://github.com/CodeforKarlsruhe/farmshops.eu)). Dieses Tool
+  übernimmt dieselbe Abfrage direkt aus der Quelle (OSM/Overpass) – täglich
+  und ohne Umweg:
+  - **Verkaufsautomaten** (`vending=` milk, egg, food, cheese, sausage, meat,
+    potato, noodle, honey, fruit, bread … sowie klassische Snack-/Getränke-/
+    Pizza-/Eisautomaten, ohne Tierfutter) → fließen automatisch als
+    **Wettbewerber in die Potenzialberechnung** ein. Einzelne Automaten lassen
+    sich ausblenden (✕) und in den Einstellungen wiederherstellen; der
+    Schalter „als Wettbewerb einrechnen" deaktiviert sie komplett.
+  - **Hofläden** (`shop=farm`), **Wochenmärkte** (`amenity=marketplace`) und
+    **Imkereien** (`craft=beekeeper`) → erscheinen als Frequenzbringer
+    (Kategorie „Hofladen & Markt").
+- Intervall in den Einstellungen konfigurierbar (Standard: alle 24 h = täglich,
+  beim App-Start wird die Fälligkeit geprüft). Manuell: „🔄 Jetzt aktualisieren".
+- Kuratierte Attraktionen werden bei Namensgleichheit nicht dupliziert;
+  OSM-Automaten in < 50 m Nähe zu manuell erfassten ebenfalls nicht.
 
 ## 📱 Android-App
 

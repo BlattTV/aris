@@ -11,7 +11,7 @@
  *    nach Nähe zum Analysepunkt auf (eigener Automat am Punkt = 1 Anteil)
  */
 import { POPULATION_CENTERS, SEASONALITY } from "./data.js";
-import { state, allAttractions } from "./store.js";
+import { state, allAttractions, allMachines } from "./store.js";
 
 const D0_KM = 0.8; // Halbwertsdistanz des Gravitations-Decays
 
@@ -75,7 +75,7 @@ export function analyzePoint(lat, lng, radiusKm = state.settings.radiusKm) {
   }
 
   // 3. Wettbewerb: Automaten im Radius teilen das Potenzial
-  const competitors = state.machines
+  const competitors = allMachines()
     .map((m) => ({ m, d: haversineKm(lat, lng, m.lat, m.lng) }))
     .filter((x) => x.d <= radiusKm);
   // Anteilsmodell: eigener (geplanter) Automat hat Gewicht 1,

@@ -4,8 +4,8 @@
  */
 import { CATEGORIES, SEASONALITY } from "./data.js";
 import {
-  state, allAttractions, subscribe, notify,
-  addMachine, updateMachine, removeMachine,
+  state, allAttractions, allMachines, subscribe, notify,
+  addMachine, updateMachine, removeMachine, restoreHiddenOsmMachines,
   addAttraction, removeAttraction,
   updateSettings, exportJson, importJson,
 } from "./store.js";
@@ -30,7 +30,7 @@ export function initUi() {
       renderAnalysisPanel();
     if (["attractions", "refresh:done", "import"].includes(topic))
       renderAttractionsPanel();
-    if (topic === "machines" || topic === "import") renderMachinesPanel();
+    if (["machines", "import", "refresh:done"].includes(topic)) renderMachinesPanel();
     if (["machines", "settings", "refresh:done", "import", "selection"].includes(topic))
       renderDashboard();
     if (topic === "refresh:start") setRefreshStatus("⏳ Aktualisiere Daten…");
@@ -168,30 +168,46 @@ function renderAttractionsPanel() {
 // ---------- Panel: Automaten ----------
 
 function renderMachinesPanel() {
-  const own = state.machines.filter((m) => !m.isCompetitor);
-  const comp = state.machines.filter((m) => m.isCompetitor);
-  $("#machines-count").textContent = `${own.length} eigene · ${comp.length} Wettbewerber`;
+  const machines = allMachines();
+  const own = machines.filter((m) => !m.isCompetitor);
+  const comp = machines.filter((m) => m.isCompetitor && m.source !== "osm");
+  const osm = machines.filter((m) => m.source === "osm");
+  $("#machines-count").textContent =
+    `${own.length} eigene · ${comp.length} Wettbewerber (manuell) · ${osm.length} aus OpenStreetMap/farmshops`;
 
-  $("#machines-list").innerHTML = state.machines.map((m) => {
+  // Eigene/manuelle zuerst, automatisch geladene danach (nach Distanz zu Coburg)
+  const sorted = [
+    ...state.machines,
+    ...osm.slice().sort((a, b) =>
+      analyzePoint(a.lat, a.lng).score < analyzePoint(b.lat, b.lng).score ? 1 : -1),
+  ];
+
+  $("#machines-list").innerHTML = sorted.map((m) => {
+    const fromOsm = m.source === "osm";
     const r = analyzePoint(m.lat, m.lng);
     return `<li class="card" data-goto="${m.lat},${m.lng}">
       <div class="card-head">
-        <strong>🥤 ${m.name}</strong>
+        <strong>${fromOsm ? "🧺" : "🥤"} ${m.name}</strong>
+        ${fromOsm ? `<span class="badge">OSM</span>` : ""}
         <span class="badge ${m.isCompetitor ? "warn" : "ok"}">${m.isCompetitor ? "Wettbewerb" : "Eigen"}</span>
-        <button class="del" data-del-machine="${m.id}" title="Löschen">✕</button>
+        <button class="del" data-del-machine="${m.id}" title="${fromOsm ? "Aus Berechnung ausblenden" : "Löschen"}">✕</button>
       </div>
-      <small>${m.type} · seit ${m.installedAt} · Score ${r.score}/100 · Prognose ${fmtEur(r.revenueYear)}/Jahr</small>
+      <small>${m.type}${fromOsm ? (m.operator ? " · " + m.operator : "") : " · seit " + m.installedAt} · Score ${r.score}/100${fromOsm ? "" : " · Prognose " + fmtEur(r.revenueYear) + "/Jahr"}</small>
       ${m.monthlySalesEur ? `<small>Ist-Umsatz: ${fmtNum(m.monthlySalesEur)} €/Monat ${istVsPlan(m, r)}</small>` : ""}
-      <div class="btn-row">
+      ${fromOsm ? "" : `<div class="btn-row">
         <button class="btn tiny ghost" data-edit-machine="${m.id}">✏️ Ist-Umsatz erfassen</button>
-      </div>
+      </div>`}
     </li>`;
-  }).join("") || `<li class="hint">Noch keine Automaten erfasst. Nutze „+ Automat auf Karte setzen".</li>`;
+  }).join("") || `<li class="hint">Noch keine Automaten erfasst. Nutze „+ Automat auf Karte setzen" oder „🔄 Jetzt aktualisieren" in den Einstellungen, um Automaten aus OpenStreetMap/farmshops zu laden.</li>`;
 
   $("#machines-list").querySelectorAll("[data-del-machine]").forEach((b) =>
     b.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (confirm("Automat löschen?")) removeMachine(b.dataset.delMachine);
+      const id = b.dataset.delMachine;
+      const msg = id.startsWith("osm-")
+        ? "Diesen OSM-Automaten aus der Berechnung ausblenden?"
+        : "Automat löschen?";
+      if (confirm(msg)) removeMachine(id);
     })
   );
   $("#machines-list").querySelectorAll("[data-edit-machine]").forEach((b) =>
@@ -290,9 +306,10 @@ function renderSettingsPanel() {
   $("#set-buys").value = s.residentBuysPerYear;
   $("#set-refresh").value = s.autoRefreshHours;
   $("#set-season").checked = s.applySeasonality;
+  $("#set-osm-machines").checked = s.includeOsmMachines;
   setRefreshStatus(
     state.lastRefresh
-      ? `Letzte Aktualisierung: ${new Date(state.lastRefresh).toLocaleString("de-DE")} · ${state.overpassPois.length} POIs automatisch geladen`
+      ? `Letzte Aktualisierung: ${new Date(state.lastRefresh).toLocaleString("de-DE")} · ${state.overpassPois.length} POIs und ${state.osmMachines.length} Automaten (farmshops-Datenmodell) automatisch geladen · ${state.hiddenOsmIds.length} ausgeblendet`
       : "Noch keine automatische Aktualisierung erfolgt."
   );
 }
@@ -352,6 +369,7 @@ function bindGlobalActions() {
       residentBuysPerYear: Number($("#set-buys").value),
       autoRefreshHours: Number($("#set-refresh").value),
       applySeasonality: $("#set-season").checked,
+      includeOsmMachines: $("#set-osm-machines").checked,
     });
     scheduleAutoRefresh();
     alert("Einstellungen gespeichert.");
@@ -363,15 +381,21 @@ function bindGlobalActions() {
     );
   });
 
+  $("#btn-restore-osm").addEventListener("click", () => {
+    restoreHiddenOsmMachines();
+    alert("Alle ausgeblendeten OSM-Automaten wurden wiederhergestellt.");
+  });
+
   $("#btn-export").addEventListener("click", () => {
     download("standort-analyse-coburg.json", exportJson());
   });
 
   $("#btn-export-csv").addEventListener("click", () => {
-    const rows = [["Name", "Typ", "Eigen/Wettbewerb", "Lat", "Lng", "Score", "Kunden/Tag", "Umsatz-Plan €/Jahr", "Gewinn-Plan €/Jahr", "Ist-Umsatz €/Monat"]];
-    for (const m of state.machines) {
+    const rows = [["Name", "Typ", "Eigen/Wettbewerb", "Quelle", "Lat", "Lng", "Score", "Kunden/Tag", "Umsatz-Plan €/Jahr", "Gewinn-Plan €/Jahr", "Ist-Umsatz €/Monat"]];
+    for (const m of allMachines()) {
       const r = analyzePoint(m.lat, m.lng);
       rows.push([m.name, m.type, m.isCompetitor ? "Wettbewerb" : "Eigen",
+        m.source === "osm" ? "OpenStreetMap" : "manuell",
         m.lat.toFixed(5), m.lng.toFixed(5), r.score,
         r.customersDay.toFixed(1), r.revenueYear.toFixed(0),
         r.netProfitYear.toFixed(0), m.monthlySalesEur || ""]);

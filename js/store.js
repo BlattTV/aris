@@ -15,6 +15,8 @@ export const state = {
   selection: null,        // {lat, lng} aktueller Analysepunkt
   lastRefresh: null,      // ISO-Zeitstempel der letzten Overpass-Aktualisierung
   overpassPois: [],       // automatisch geladene POIs
+  osmMachines: [],        // automatisch geladene Automaten (farmshops.eu-Datenmodell)
+  hiddenOsmIds: [],       // vom Nutzer ausgeblendete OSM-Automaten
 };
 
 export function subscribe(fn) {
@@ -36,6 +38,8 @@ export function load() {
       state.settings = { ...DEFAULT_SETTINGS, ...(saved.settings || {}) };
       state.lastRefresh = saved.lastRefresh || null;
       state.overpassPois = saved.overpassPois || [];
+      state.osmMachines = saved.osmMachines || [];
+      state.hiddenOsmIds = saved.hiddenOsmIds || [];
       if (saved.customAttractions) {
         state.attractions.push(
           ...saved.customAttractions.map((a) => ({ ...a, source: "manuell" }))
@@ -53,6 +57,8 @@ export function persist() {
     settings: state.settings,
     lastRefresh: state.lastRefresh,
     overpassPois: state.overpassPois,
+    osmMachines: state.osmMachines,
+    hiddenOsmIds: state.hiddenOsmIds,
     customAttractions: state.attractions.filter((a) => a.source === "manuell"),
   };
   localStorage.setItem(LS_KEY, JSON.stringify(data));
@@ -60,6 +66,19 @@ export function persist() {
 
 export function allAttractions() {
   return [...state.attractions, ...state.overpassPois];
+}
+
+/**
+ * Alle für die Wettbewerbs-Berechnung relevanten Automaten:
+ * manuell erfasste plus (sofern aktiviert) automatisch aus
+ * OpenStreetMap/farmshops übernommene, ohne ausgeblendete.
+ */
+export function allMachines() {
+  const list = [...state.machines];
+  if (state.settings.includeOsmMachines) {
+    list.push(...state.osmMachines.filter((m) => !state.hiddenOsmIds.includes(m.id)));
+  }
+  return list;
 }
 
 // --- Automaten ---
@@ -92,7 +111,19 @@ export function updateMachine(id, patch) {
 }
 
 export function removeMachine(id) {
-  state.machines = state.machines.filter((x) => x.id !== id);
+  if (id.startsWith("osm-")) {
+    // Automatisch geladene Automaten nicht löschen, sondern ausblenden,
+    // sonst kämen sie bei der nächsten Aktualisierung zurück.
+    if (!state.hiddenOsmIds.includes(id)) state.hiddenOsmIds.push(id);
+  } else {
+    state.machines = state.machines.filter((x) => x.id !== id);
+  }
+  persist();
+  notify("machines");
+}
+
+export function restoreHiddenOsmMachines() {
+  state.hiddenOsmIds = [];
   persist();
   notify("machines");
 }
@@ -142,6 +173,7 @@ export function exportJson() {
       exportedAt: new Date().toISOString(),
       machines: state.machines,
       settings: state.settings,
+      hiddenOsmIds: state.hiddenOsmIds,
       customAttractions: state.attractions.filter((a) => a.source === "manuell"),
     },
     null,
@@ -153,6 +185,7 @@ export function importJson(text) {
   const data = JSON.parse(text);
   if (Array.isArray(data.machines)) state.machines = data.machines;
   if (data.settings) state.settings = { ...DEFAULT_SETTINGS, ...data.settings };
+  if (Array.isArray(data.hiddenOsmIds)) state.hiddenOsmIds = data.hiddenOsmIds;
   if (Array.isArray(data.customAttractions)) {
     state.attractions = state.attractions.filter((a) => a.source !== "manuell");
     state.attractions.push(...data.customAttractions.map((a) => ({ ...a, source: "manuell" })));

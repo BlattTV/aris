@@ -210,6 +210,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 }
 .machine-pin.own { background: #0e7490; }
 .machine-pin.competitor { background: #b91c1c; }
+.machine-pin.osm { background: #7c5a1e; border-style: dashed; opacity: 0.92; }
 
 .analysis-pin { position: relative; font-size: 30px; filter: drop-shadow(0 2px 4px rgba(0,0,0,.5)); }
 .score-badge {

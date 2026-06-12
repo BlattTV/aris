@@ -13,6 +13,7 @@ export const CATEGORIES = {
   event:   { label: "Event & Festival", color: "#f472b6", icon: "🎪" },
   sport:   { label: "Sport & Arena", color: "#fb923c", icon: "⚽" },
   einkauf: { label: "Einkauf & Zentrum", color: "#facc15", icon: "🛍️" },
+  regional:{ label: "Hofladen & Markt", color: "#a3e635", icon: "🧑‍🌾" },
 };
 
 // Saisonfaktoren je Monat (Index 0 = Januar). Kalibriert auf fränkische
@@ -25,6 +26,7 @@ export const SEASONALITY = {
   event:    [0.3, 0.6, 0.7, 0.9, 1.2, 1.4, 2.2, 1.5, 1.0, 0.8, 0.6, 1.8],
   sport:    [1.2, 1.2, 1.1, 1.0, 0.8, 0.6, 0.5, 0.8, 1.1, 1.2, 1.3, 1.2],
   einkauf:  [0.9, 0.8, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.1, 1.2, 1.5],
+  regional: [0.7, 0.7, 0.9, 1.1, 1.2, 1.2, 1.2, 1.2, 1.2, 1.1, 0.8, 1.0],
 };
 
 export const SEED_ATTRACTIONS = [
@@ -124,6 +126,8 @@ export const DEFAULT_SETTINGS = {
   opexPerMachineMonth: 180,
   // Automatische Datenaktualisierung (Overpass) alle X Stunden (0 = aus)
   autoRefreshHours: 24,
+  // Automatisch geladene OSM-/farmshops-Automaten als Wettbewerb einrechnen
+  includeOsmMachines: true,
   // Saisonfaktor auf aktuellen Monat anwenden
   applySeasonality: true,
 };

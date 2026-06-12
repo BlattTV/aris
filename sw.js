@@ -3,7 +3,7 @@
  * installierbar (PWA). App-Shell wird gecacht, Kartenkacheln und
  * Overpass-Daten laufen network-first mit Cache-Fallback.
  */
-const CACHE = "coburg-analyzer-v1";
+const CACHE = "coburg-analyzer-v2";
 const APP_SHELL = [
   "./",
   "./index.html",

@@ -3,7 +3,7 @@
  * Potenzial-Heatmap und Standortvorschläge.
  */
 import { CATEGORIES, POPULATION_CENTERS } from "./data.js";
-import { state, allAttractions, subscribe, notify } from "./store.js";
+import { state, allAttractions, allMachines, subscribe, notify } from "./store.js";
 import { analyzePoint, scoreGrid, suggestLocations, fmtNum } from "./analysis.js";
 
 export let map;
@@ -61,7 +61,7 @@ export function initMap() {
 
   subscribe((topic) => {
     if (["attractions", "refresh:done", "import"].includes(topic)) renderAttractions();
-    if (["machines", "import"].includes(topic)) {
+    if (["machines", "import", "refresh:done", "settings"].includes(topic)) {
       renderMachines();
       if (state.selection) renderAnalysis();
     }
@@ -96,17 +96,19 @@ export function renderAttractions() {
 
 export function renderMachines() {
   machineLayer.clearLayers();
-  for (const m of state.machines) {
+  for (const m of allMachines()) {
+    const fromOsm = m.source === "osm";
     const icon = L.divIcon({
       className: "machine-icon",
-      html: `<div class="machine-pin ${m.isCompetitor ? "competitor" : "own"}">🥤</div>`,
+      html: `<div class="machine-pin ${m.isCompetitor ? "competitor" : "own"}${fromOsm ? " osm" : ""}">${fromOsm ? "🧺" : "🥤"}</div>`,
       iconSize: [30, 30],
       iconAnchor: [15, 15],
     });
     L.marker([m.lat, m.lng], { icon })
       .bindPopup(`
-        <strong>🥤 ${m.name}</strong><br>
+        <strong>${fromOsm ? "🧺" : "🥤"} ${m.name}</strong><br>
         Typ: ${m.type} · ${m.isCompetitor ? "Wettbewerber" : "Eigener Automat"}<br>
+        ${fromOsm ? "Quelle: OpenStreetMap (farmshops-Daten, auto-aktualisiert)<br>" : ""}
         ${m.monthlySalesEur ? `Umsatz: ${fmtNum(m.monthlySalesEur)} €/Monat<br>` : ""}
         ${m.note ? m.note + "<br>" : ""}
         <button class="popup-btn" data-analyze="${m.lat},${m.lng}">📍 Standort analysieren</button>
