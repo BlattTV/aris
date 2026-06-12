@@ -89,6 +89,7 @@
 
       <!-- Einstellungen -->
       <section class="panel" id="panel-einstellungen">
+        <div id="account-section"></div>
         <h3>Geschäftsmodell-Parameter</h3>
         <div class="form-grid">
           <label>Capture-Rate (% der Passanten)<input type="number" id="set-capture" step="0.1" min="0"></label>
@@ -117,6 +118,37 @@
     </aside>
 
     <main id="map"></main>
+  </div>
+
+  <!-- Anmeldung (nur Server-Modus mit Lizenzpflicht) -->
+  <div id="auth-overlay">
+    <div class="auth-card">
+      <div class="auth-head">
+        <span class="logo">📍</span>
+        <div>
+          <h2>Standort-Analyse Deutschland</h2>
+          <small>Anmeldung erforderlich – Zugang per Lizenz</small>
+        </div>
+      </div>
+      <nav class="auth-tabs">
+        <button id="auth-tab-login" class="tab-btn active" type="button">Anmelden</button>
+        <button id="auth-tab-register" class="tab-btn" type="button">Registrieren (mit Lizenzschlüssel)</button>
+      </nav>
+      <form id="auth-form-login">
+        <label>E-Mail<input type="email" id="auth-email" required autocomplete="username"></label>
+        <label>Passwort<input type="password" id="auth-password" required autocomplete="current-password"></label>
+        <button class="btn" type="submit">Anmelden</button>
+      </form>
+      <form id="auth-form-register" style="display:none">
+        <label>Name<input type="text" id="reg-name" autocomplete="name"></label>
+        <label>E-Mail<input type="email" id="reg-email" required autocomplete="username"></label>
+        <label>Passwort (min. 8 Zeichen)<input type="password" id="reg-password" minlength="8" required autocomplete="new-password"></label>
+        <label>Lizenzschlüssel<input type="text" id="reg-license" placeholder="SA-XXXX-XXXX-XXXX-XXXX" required></label>
+        <button class="btn" type="submit">Konto erstellen</button>
+      </form>
+      <div id="auth-error" class="auth-error"></div>
+      <div class="sub">Noch keinen Lizenzschlüssel? Wende dich an den Betreiber dieser Instanz.</div>
+    </div>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"

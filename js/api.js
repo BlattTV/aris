@@ -75,11 +75,20 @@ export async function loadViewport(bounds, { force = false } = {}) {
   try {
     let data;
     if (mode === "server") {
+      const j = async (url) => {
+        const r = await fetch(url);
+        if (r.status === 401 || r.status === 403) {
+          notify("auth:required");
+          throw new Error("Anmeldung/Lizenz erforderlich");
+        }
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      };
       const q = `bbox=${bbox.s},${bbox.w},${bbox.n},${bbox.e}`;
       const [machines, pois, population] = await Promise.all([
-        fetch(`api/machines?${q}`).then((r) => r.json()),
-        fetch(`api/pois?${q}`).then((r) => r.json()),
-        fetch(`api/population?${q}`).then((r) => r.json()),
+        j(`api/machines?${q}`),
+        j(`api/pois?${q}`),
+        j(`api/population?${q}`),
       ]);
       data = { machines, pois, population };
     } else {

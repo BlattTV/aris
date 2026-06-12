@@ -29,7 +29,38 @@ Kartenabfragen aus diesem Bestand. Erststart: Das erste Deutschland-Update
 beginnt nach ~10 s und dauert einige Minuten.
 
 Manuelles Datenupdate: `npm run update-data` · Konfiguration über
-Umgebungsvariablen `PORT`, `UPDATE_INTERVAL_H`, `DATA_DIR`.
+Umgebungsvariablen `PORT`, `UPDATE_INTERVAL_H`, `DATA_DIR`, `REQUIRE_AUTH`,
+`ADMIN_EMAIL`, `ADMIN_PASSWORD`.
+
+## 🔐 Accounts, Lizenzen & Admin (Monetarisierung)
+
+Der Server enthält ein vollständiges Account-System – die Daten-API ist nur
+mit **gültiger Lizenz** nutzbar. So lassen sich Zugänge verkaufen:
+
+1. **Admin-Konto**: wird beim ersten Start automatisch angelegt. E-Mail/Passwort
+   über `ADMIN_EMAIL`/`ADMIN_PASSWORD` setzen – ohne diese Variablen wird ein
+   Zufallspasswort generiert und **einmalig im Log ausgegeben**
+   (`journalctl -u standort-analyse`). Nach dem ersten Login ändern.
+2. **Lizenzschlüssel erzeugen**: In der **Admin-Oberfläche** (`/admin.html`,
+   Link auch im ⚙️-Tab) Schlüssel mit Plan (Standard/Pro/Test), Laufzeit in
+   Tagen und Stückzahl generieren – z. B. „Pro, 365 Tage" als Jahreslizenz.
+   Den Schlüssel (`SA-XXXX-XXXX-XXXX-XXXX`) verkaufst du an den Kunden.
+3. **Kunde registriert sich** auf der Startseite mit E-Mail, Passwort und dem
+   Schlüssel (Registrierung ist *nur* mit gültigem Schlüssel möglich; jeder
+   Schlüssel ist einmal einlösbar). Verlängerung: weiteren Schlüssel kaufen
+   und im ⚙️-Tab einlösen – Laufzeiten addieren sich.
+4. **Verwaltung**: Die Admin-Oberfläche zeigt Statistiken (aktive Lizenzen,
+   bald ablaufende), alle Konten mit Lizenzstatus und letztem Login und kann
+   je Nutzer verlängern (+30 T/+1 Jahr), sperren, Passwort zurücksetzen,
+   löschen sowie unbenutzte Schlüssel widerrufen und das Deutschland-
+   Datenupdate anstoßen.
+
+Technik: scrypt-Passwort-Hashes, HttpOnly-Session-Cookies (30 Tage),
+Login-Rate-Limit, Persistenz in `data/users.json`/`licenses.json`/`sessions.json`
+(im Backup des Containers mitsichern!). `REQUIRE_AUTH=0` deaktiviert die
+Lizenzpflicht (z. B. für eine offene Demo). Abgelaufene Lizenz oder gesperrtes
+Konto ⇒ API liefert 401/403, das Frontend zeigt den Anmelde-/Lizenzdialog.
+Hinter einem HTTPS-Reverse-Proxy betreiben, wenn aus dem Internet erreichbar.
 
 ### Variante B: Statisch (ohne Backend)
 
@@ -165,9 +196,12 @@ js/analysis.js          Analyse-Engine (Gravitationsmodell, Scoring, Vorschläge
 js/map.js               Leaflet-Karte, Layer, Heatmap, Viewport-Nachladen
 js/ui.js                Panels, Dashboard, Suche, Export, Berichte
 js/charts.js            Abhängigkeitsfreie Canvas-Charts
+js/auth.js              Login/Registrierung/Lizenz (Client)
+admin.html + js/admin.js  Admin-Oberfläche (Konten, Lizenzen, Betrieb)
 sw.js                   Service Worker (offline / PWA)
 manifest.webmanifest    PWA-Manifest
 server/server.mjs       Node-Server: Statik + API + tägliches Deutschland-Update
+server/auth.mjs         Accounts, Lizenzschlüssel, Sessions (scrypt, Cookies)
 server/update-data.mjs  Standalone-Datenupdate (Cron-tauglich)
 deploy/                 LXC-Installation, systemd-Units, Git-Auto-Update
 android/                Android-App (WebView), APK via GitHub Actions
@@ -176,10 +210,13 @@ android/                Android-App (WebView), APK via GitHub Actions
 ## 🛣️ Roadmap zur Skalierung
 
 Erreicht: ✅ deutschlandweite Abdeckung, ✅ eigener Server mit täglicher
-Datenpflege, ✅ Android-App. Nächste Ausbaustufen:
+Datenpflege, ✅ Android-App, ✅ Accounts + Lizenzverkauf + Admin-Oberfläche.
+Nächste Ausbaustufen:
 
-1. **Team-Accounts & Sync** – Portfolio serverseitig statt localStorage
-   (Postgres/PostGIS), Login, Audit-Log, Mehrgeräte-Sync.
+1. **Portfolio-Sync** – Automaten/Einstellungen serverseitig je Konto statt
+   localStorage (Mehrgeräte-Sync, Team-Freigaben); bei Wachstum Postgres/
+   PostGIS statt JSON-Dateien. Zahlungsanbindung (Stripe/PayPal) für
+   automatischen Schlüsselversand.
 2. **Echte Frequenzdaten** – Mobilfunk-Bewegungsdaten, Google Popular Times,
    Veranstaltungskalender und Telemetrie der eigenen Automaten (Verkäufe je
    Stunde) zur automatischen Modell-Kalibrierung.

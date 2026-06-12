@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="robots" content="noindex">
+  <title>Admin · Standort-Analyse Deutschland</title>
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body class="admin-body">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🛠️</span>
+      <div>
+        <h1>Admin-Oberfläche</h1>
+        <small>Konten, Lizenzen & Betrieb</small>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <a class="btn ghost" href="index.html">🗺️ Zur Karte</a>
+      <button class="btn ghost" id="btn-admin-logout">🚪 Abmelden</button>
+    </div>
+  </header>
+
+  <main class="admin-main" id="admin-main">
+    <div class="hint" id="admin-guard">⏳ Prüfe Berechtigung…</div>
+
+    <div id="admin-content" style="display:none">
+      <section>
+        <h3>Überblick</h3>
+        <div class="kpi-grid admin-kpis" id="admin-stats"></div>
+      </section>
+
+      <section>
+        <h3>🎟️ Lizenzschlüssel erzeugen (zum Verkauf)</h3>
+        <form class="gen-form" id="license-form">
+          <label>Plan
+            <select id="lic-plan">
+              <option value="standard">Standard</option>
+              <option value="pro">Pro</option>
+              <option value="trial">Test</option>
+            </select>
+          </label>
+          <label>Laufzeit (Tage)<input type="number" id="lic-days" value="30" min="1"></label>
+          <label>Anzahl<input type="number" id="lic-count" value="1" min="1" max="100"></label>
+          <label>Notiz (z. B. Käufer)<input type="text" id="lic-note" placeholder="optional"></label>
+          <button class="btn" type="submit">Erzeugen</button>
+        </form>
+        <div id="new-keys" class="new-keys"></div>
+        <h4>Nicht eingelöste Schlüssel</h4>
+        <div class="table-wrap"><table id="licenses-table"></table></div>
+      </section>
+
+      <section>
+        <h3>👥 Nutzerkonten</h3>
+        <form class="gen-form" id="user-form">
+          <label>E-Mail<input type="email" id="new-email" required></label>
+          <label>Name<input type="text" id="new-name"></label>
+          <label>Lizenz-Tage<input type="number" id="new-days" value="30" min="0"></label>
+          <button class="btn" type="submit">Konto anlegen</button>
+        </form>
+        <div id="new-user-info" class="new-keys"></div>
+        <div class="table-wrap"><table id="users-table"></table></div>
+      </section>
+
+      <section>
+        <h3>⚙️ Betrieb</h3>
+        <div class="sub" id="ops-status"></div>
+        <button class="btn" id="btn-trigger-update">🔄 Deutschland-Datenupdate anstoßen</button>
+      </section>
+    </div>
+  </main>
+
+  <script type="module" src="js/admin.js"></script>
+</body>
+</html>

@@ -3,7 +3,7 @@
  * installierbar (PWA). App-Shell wird gecacht, Kartenkacheln und
  * Overpass-Daten laufen network-first mit Cache-Fallback.
  */
-const CACHE = "standort-analyse-v3";
+const CACHE = "standort-analyse-v4";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -14,6 +14,7 @@ const APP_SHELL = [
   "./js/analysis.js",
   "./js/queries.mjs",
   "./js/api.js",
+  "./js/auth.js",
   "./js/map.js",
   "./js/ui.js",
   "./js/charts.js",

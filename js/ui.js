@@ -12,6 +12,7 @@ import {
 import { analyzePoint, haversineKm, fmtNum, fmtEur } from "./analysis.js";
 import { setClickMode, renderHeatmap, renderSuggestions, map } from "./map.js";
 import { refreshNow, scheduleAutoRefresh, getMode, getServerStatus, geocode, loadViewport } from "./api.js";
+import { getUserInfo, logout, redeemLicense, changePassword, showAuthOverlay } from "./auth.js";
 import { barChart, donut } from "./charts.js";
 
 const $ = (sel) => document.querySelector(sel);
@@ -41,6 +42,11 @@ export function initUi() {
     if (topic === "data:toolarge") setDataStatus("🔍 zum Laden hineinzoomen");
     if (topic === "data:error") setDataStatus("⚠️ Datenabruf fehlgeschlagen");
     if (topic === "mode") renderSettingsPanel();
+    if (topic === "auth") renderSettingsPanel();
+    if (topic === "auth:required") {
+      setDataStatus("🔒 Anmeldung erforderlich");
+      showAuthOverlay();
+    }
   });
 }
 
@@ -310,7 +316,65 @@ function renderDashboard() {
 
 // ---------- Panel: Einstellungen ----------
 
+function renderAccountSection() {
+  const el = $("#account-section");
+  if (!el) return;
+  const user = getUserInfo();
+  if (getMode() !== "server" || !getServerStatus()?.authRequired) {
+    el.innerHTML = "";
+    return;
+  }
+  if (!user) {
+    el.innerHTML = `<div class="account-card expired">
+      <div class="who">Nicht angemeldet</div>
+      <button class="btn tiny" id="btn-show-login">🔑 Anmelden</button>
+    </div>`;
+    $("#btn-show-login").addEventListener("click", showAuthOverlay);
+    return;
+  }
+  const lic = user.license || {};
+  const until = lic.validUntil ? new Date(lic.validUntil).toLocaleDateString("de-DE") : "unbegrenzt";
+  el.innerHTML = `
+    <div class="account-card ${lic.valid ? "" : "expired"}">
+      <div class="who">👤 ${user.name} <span class="badge">${user.role === "admin" ? "Admin" : "Nutzer"}</span></div>
+      <div class="lic">${user.email} · Lizenz: ${lic.valid ? `✅ ${lic.plan || "aktiv"} bis ${until}` : `❌ ${lic.reason || "ungültig"}`}</div>
+      <div class="btn-row">
+        ${user.role === "admin" ? `<a class="btn tiny" href="admin.html">🛠️ Admin-Oberfläche</a>` : ""}
+        <button class="btn tiny ghost" id="btn-redeem">🎟️ Lizenzschlüssel einlösen</button>
+        <button class="btn tiny ghost" id="btn-passwd">🔒 Passwort ändern</button>
+        <button class="btn tiny ghost" id="btn-logout">🚪 Abmelden</button>
+      </div>
+    </div>`;
+  $("#btn-redeem").addEventListener("click", async () => {
+    const key = prompt("Lizenzschlüssel (SA-XXXX-…):");
+    if (!key) return;
+    try {
+      await redeemLicense(key.trim());
+      alert("Lizenz eingelöst – Laufzeit verlängert.");
+    } catch (e) {
+      alert("Fehler: " + e.message);
+    }
+  });
+  $("#btn-passwd").addEventListener("click", async () => {
+    const current = prompt("Aktuelles Passwort:");
+    if (current === null) return;
+    const next = prompt("Neues Passwort (min. 8 Zeichen):");
+    if (next === null) return;
+    try {
+      await changePassword(current, next);
+      alert("Passwort geändert.");
+    } catch (e) {
+      alert("Fehler: " + e.message);
+    }
+  });
+  $("#btn-logout").addEventListener("click", async () => {
+    await logout();
+    showAuthOverlay();
+  });
+}
+
 function renderSettingsPanel() {
+  renderAccountSection();
   const s = state.settings;
   $("#set-capture").value = s.captureRatePct;
   $("#set-ticket").value = s.avgTicketEur;

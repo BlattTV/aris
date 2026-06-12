@@ -21,6 +21,7 @@ import {
   OVERPASS_URL, buildBboxQuery, buildGermanyFarmshopsQuery,
   buildGermanyPopulationQuery, parseElements, inBbox, parseBboxParam,
 } from "../js/queries.mjs";
+import { initAuth, handleAuthRoute, getUser, licenseState } from "./auth.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, "data");
@@ -30,6 +31,8 @@ const PORT = Number(process.env.PORT) || 8080;
 const HOST = process.env.HOST || "0.0.0.0";
 const UPDATE_INTERVAL_H = Number(process.env.UPDATE_INTERVAL_H) || 24;
 const TILE_TTL_MS = 24 * 60 * 60 * 1000;
+// Lizenz-Pflicht für die Daten-API (REQUIRE_AUTH=0 zum Deaktivieren, z. B. Demo)
+const REQUIRE_AUTH = process.env.REQUIRE_AUTH !== "0";
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -177,13 +180,40 @@ function log(msg) {
   console.log(`[${new Date().toISOString()}] ${msg}`);
 }
 
-function sendJson(res, status, data) {
+function sendJson(res, status, data, headers = {}) {
   const body = JSON.stringify(data);
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
+    ...headers,
   });
   res.end(body);
+}
+
+/** JSON-Body lesen (Limit 64 KB). */
+function readJson(req) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on("data", (c) => {
+      size += c.length;
+      if (size > 65536) {
+        reject(Object.assign(new Error("Anfrage zu groß"), { status: 413 }));
+        req.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on("end", () => {
+      if (!chunks.length) return resolve({});
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+      } catch {
+        reject(Object.assign(new Error("Ungültiges JSON"), { status: 400 }));
+      }
+    });
+    req.on("error", reject);
+  });
 }
 
 async function serveStatic(req, res, pathname) {
@@ -214,6 +244,7 @@ const server = http.createServer(async (req, res) => {
     if (p === "/api/status") {
       return sendJson(res, 200, {
         mode: "server",
+        authRequired: REQUIRE_AUTH,
         updatedAt: germany.updatedAt,
         updateRunning,
         machines: germany.machines.length,
@@ -221,6 +252,26 @@ const server = http.createServer(async (req, res) => {
         population: germany.population.length,
         updateIntervalHours: UPDATE_INTERVAL_H,
       });
+    }
+
+    // Auth-/Admin-Routen (Login, Registrierung, Lizenzverwaltung …)
+    if (p.startsWith("/api/auth/") || p.startsWith("/api/admin/")) {
+      const body = req.method === "POST" ? await readJson(req) : {};
+      const result = await handleAuthRoute(p, req, body);
+      if (result) return sendJson(res, result.status, result.body, result.headers);
+      return sendJson(res, 404, { error: "Unbekannter Endpunkt" });
+    }
+
+    // Daten-API: nur mit gültiger Lizenz (Admin immer)
+    if (REQUIRE_AUTH && (p === "/api/machines" || p === "/api/population" ||
+        p === "/api/pois" || p === "/api/refresh")) {
+      const user = getUser(req);
+      if (!user) return sendJson(res, 401, { error: "Nicht angemeldet" });
+      const lic = licenseState(user);
+      if (!lic.valid) return sendJson(res, 403, { error: "Keine gültige Lizenz: " + lic.reason });
+      if (p === "/api/refresh" && user.role !== "admin") {
+        return sendJson(res, 403, { error: "Deutschland-Update kann nur der Admin anstoßen" });
+      }
     }
 
     if (p === "/api/machines" || p === "/api/population" || p === "/api/pois") {
@@ -251,13 +302,16 @@ const server = http.createServer(async (req, res) => {
 
     return await serveStatic(req, res, p);
   } catch (e) {
-    log("Fehler bei " + p + ": " + e.message);
-    return sendJson(res, 500, { error: e.message });
+    const status = e.status || 500;
+    if (status >= 500) log("Fehler bei " + p + ": " + e.message);
+    return sendJson(res, status, { error: e.message });
   }
 });
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   await loadGermany();
+  await initAuth(DATA_DIR, log);
+  if (!REQUIRE_AUTH) log("⚠️ REQUIRE_AUTH=0 – Daten-API läuft ohne Lizenzprüfung!");
   scheduleUpdates();
   server.listen(PORT, HOST, () => {
     log(`Standort-Analyse Deutschland läuft auf http://${HOST}:${PORT}`);
