@@ -10,22 +10,13 @@
  *  - Wettbewerb: vorhandene Automaten teilen das Potenzial anteilig
  *    nach Nähe zum Analysepunkt auf (eigener Automat am Punkt = 1 Anteil)
  */
-import { POPULATION_CENTERS, SEASONALITY } from "./data.js";
+import { SEASONALITY } from "./data.js";
 import { state, allAttractions, allMachines } from "./store.js";
+import { haversineKm } from "./queries.mjs";
+
+export { haversineKm };
 
 const D0_KM = 0.8; // Halbwertsdistanz des Gravitations-Decays
-
-export function haversineKm(lat1, lng1, lat2, lng2) {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(a));
-}
 
 function decay(dKm) {
   return 1 / (1 + (dKm / D0_KM) ** 2);
@@ -66,7 +57,7 @@ export function analyzePoint(lat, lng, radiusKm = state.settings.radiusKm) {
   // 2. Einwohner im Einzugsgebiet
   let residentsInRange = 0;
   let residentPurchasesYear = 0;
-  for (const p of POPULATION_CENTERS) {
+  for (const p of state.populationCenters) {
     const d = haversineKm(lat, lng, p.lat, p.lng);
     if (d > radiusKm) continue;
     const reach = p.pop * decay(d);

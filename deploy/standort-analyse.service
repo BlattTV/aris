@@ -1,0 +1,22 @@
+[Unit]
+Description=Standort-Analyse Deutschland (Automaten Business Intelligence)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=standortanalyse
+WorkingDirectory=/opt/standort-analyse
+ExecStart=/usr/bin/node server/server.mjs
+Restart=always
+RestartSec=5
+Environment=PORT=8080
+Environment=UPDATE_INTERVAL_H=24
+# Härtung
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/opt/standort-analyse/data
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

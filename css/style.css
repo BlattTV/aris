@@ -37,6 +37,19 @@ html, body {
 .brand small { color: var(--muted); }
 .topbar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
+.search { display: flex; align-items: center; gap: 6px; flex: 1; max-width: 420px; }
+.search input {
+  flex: 1;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 13px;
+  min-width: 120px;
+}
+#data-status { white-space: nowrap; }
+
 /* ---------- Layout ---------- */
 .layout {
   display: flex;
@@ -147,7 +160,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .kpi.pos span { color: var(--good); }
 .kpi.neg span { color: var(--bad); }
 
-.sub { font-size: 11.5px; color: var(--muted); margin: 8px 0; }
+.sub { font-size: 11.5px; color: var(--muted); margin: 8px 0; white-space: pre-line; }
 .sub.ok { color: var(--good); }
 .hint {
   background: var(--bg3);

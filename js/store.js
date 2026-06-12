@@ -2,7 +2,8 @@
  * Zentraler Anwendungs-Store mit localStorage-Persistenz,
  * Event-System und Import/Export.
  */
-import { SEED_ATTRACTIONS, DEFAULT_SETTINGS } from "./data.js";
+import { SEED_ATTRACTIONS, POPULATION_CENTERS, DEFAULT_SETTINGS } from "./data.js";
+import { haversineKm } from "./queries.mjs";
 
 const LS_KEY = "coburg-analyzer-v1";
 
@@ -13,9 +14,10 @@ export const state = {
   machines: [],           // {id, name, lat, lng, type, monthlySalesEur?, owner, installedAt, isCompetitor}
   settings: { ...DEFAULT_SETTINGS },
   selection: null,        // {lat, lng} aktueller Analysepunkt
-  lastRefresh: null,      // ISO-Zeitstempel der letzten Overpass-Aktualisierung
-  overpassPois: [],       // automatisch geladene POIs
+  lastRefresh: null,      // ISO-Zeitstempel der letzten Datenaktualisierung
+  overpassPois: [],       // automatisch geladene POIs (in-memory, je Viewport)
   osmMachines: [],        // automatisch geladene Automaten (farmshops.eu-Datenmodell)
+  populationCenters: [],  // Bevölkerungsschwerpunkte (Seed + OSM-place-Nodes)
   hiddenOsmIds: [],       // vom Nutzer ausgeblendete OSM-Automaten
 };
 
@@ -30,6 +32,7 @@ export function notify(topic) {
 
 export function load() {
   state.attractions = SEED_ATTRACTIONS.map((a) => ({ ...a, source: "kuratiert" }));
+  state.populationCenters = POPULATION_CENTERS.map((p) => ({ ...p, source: "kuratiert" }));
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (raw) {
@@ -37,8 +40,6 @@ export function load() {
       state.machines = saved.machines || [];
       state.settings = { ...DEFAULT_SETTINGS, ...(saved.settings || {}) };
       state.lastRefresh = saved.lastRefresh || null;
-      state.overpassPois = saved.overpassPois || [];
-      state.osmMachines = saved.osmMachines || [];
       state.hiddenOsmIds = saved.hiddenOsmIds || [];
       if (saved.customAttractions) {
         state.attractions.push(
@@ -52,16 +53,59 @@ export function load() {
 }
 
 export function persist() {
+  // Massendaten (POIs, OSM-Automaten, Bevölkerung) werden bewusst nicht
+  // persistiert – sie kommen je Kartenausschnitt frisch vom Server/Overpass.
   const data = {
     machines: state.machines,
     settings: state.settings,
     lastRefresh: state.lastRefresh,
-    overpassPois: state.overpassPois,
-    osmMachines: state.osmMachines,
     hiddenOsmIds: state.hiddenOsmIds,
     customAttractions: state.attractions.filter((a) => a.source === "manuell"),
   };
   localStorage.setItem(LS_KEY, JSON.stringify(data));
+}
+
+// Obergrenzen gegen Speicherwachstum bei langen Sitzungen quer durch Deutschland
+const MAX_POIS = 8000;
+const MAX_OSM_MACHINES = 8000;
+const MAX_POPULATION = 6000;
+
+/**
+ * Viewport-Daten deduplizierend in den Store übernehmen
+ * (gemeinsamer Pfad für Server-API und direkten Overpass-Abruf).
+ */
+export function mergeFetched({ pois = [], machines = [], population = [] }) {
+  const knownNames = new Set(
+    state.attractions.map((a) => a.name.toLowerCase().slice(0, 12))
+  );
+  const poiIds = new Set(state.overpassPois.map((p) => p.id));
+  for (const p of pois) {
+    if (poiIds.has(p.id)) continue;
+    if (knownNames.has(p.name.toLowerCase().slice(0, 12))) continue;
+    state.overpassPois.push(p);
+  }
+  if (state.overpassPois.length > MAX_POIS)
+    state.overpassPois = state.overpassPois.slice(-MAX_POIS);
+
+  const machineIds = new Set(state.osmMachines.map((m) => m.id));
+  for (const m of machines) {
+    if (machineIds.has(m.id)) continue;
+    // Dublette: manuell erfasster Automat in < 50 m Entfernung
+    if (state.machines.some((x) => haversineKm(m.lat, m.lng, x.lat, x.lng) < 0.05)) continue;
+    state.osmMachines.push(m);
+  }
+  if (state.osmMachines.length > MAX_OSM_MACHINES)
+    state.osmMachines = state.osmMachines.slice(-MAX_OSM_MACHINES);
+
+  for (const p of population) {
+    if (!state.populationCenters.some(
+      (x) => haversineKm(p.lat, p.lng, x.lat, x.lng) < 1.0
+    )) state.populationCenters.push(p);
+  }
+  if (state.populationCenters.length > MAX_POPULATION)
+    state.populationCenters = state.populationCenters.slice(-MAX_POPULATION);
+
+  notify("data:merged");
 }
 
 export function allAttractions() {

@@ -9,9 +9,9 @@ import {
   addAttraction, removeAttraction,
   updateSettings, exportJson, importJson,
 } from "./store.js";
-import { analyzePoint, fmtNum, fmtEur } from "./analysis.js";
+import { analyzePoint, haversineKm, fmtNum, fmtEur } from "./analysis.js";
 import { setClickMode, renderHeatmap, renderSuggestions, map } from "./map.js";
-import { refreshFromOverpass, scheduleAutoRefresh } from "./overpass.js";
+import { refreshNow, scheduleAutoRefresh, getMode, getServerStatus, geocode, loadViewport } from "./api.js";
 import { barChart, donut } from "./charts.js";
 
 const $ = (sel) => document.querySelector(sel);
@@ -28,17 +28,25 @@ export function initUi() {
   subscribe((topic) => {
     if (topic === "selection" || topic === "settings" || topic === "machines")
       renderAnalysisPanel();
-    if (["attractions", "refresh:done", "import"].includes(topic))
+    if (["attractions", "data:merged", "import"].includes(topic))
       renderAttractionsPanel();
-    if (["machines", "import", "refresh:done"].includes(topic)) renderMachinesPanel();
-    if (["machines", "settings", "refresh:done", "import", "selection"].includes(topic))
+    if (["machines", "import", "data:merged"].includes(topic)) renderMachinesPanel();
+    if (["machines", "settings", "data:merged", "import", "selection"].includes(topic))
       renderDashboard();
-    if (topic === "refresh:start") setRefreshStatus("⏳ Aktualisiere Daten…");
-    if (topic === "refresh:done") {
-      setRefreshStatus(`✅ Daten aktualisiert: ${new Date().toLocaleString("de-DE")}`);
+    if (topic === "data:loading") setDataStatus("⏳ lädt…");
+    if (topic === "data:merged") {
+      setDataStatus("");
       renderSettingsPanel();
     }
+    if (topic === "data:toolarge") setDataStatus("🔍 zum Laden hineinzoomen");
+    if (topic === "data:error") setDataStatus("⚠️ Datenabruf fehlgeschlagen");
+    if (topic === "mode") renderSettingsPanel();
   });
+}
+
+function setDataStatus(text) {
+  const el = $("#data-status");
+  if (el) el.textContent = text;
 }
 
 function initTabs() {
@@ -173,14 +181,19 @@ function renderMachinesPanel() {
   const comp = machines.filter((m) => m.isCompetitor && m.source !== "osm");
   const osm = machines.filter((m) => m.source === "osm");
   $("#machines-count").textContent =
-    `${own.length} eigene · ${comp.length} Wettbewerber (manuell) · ${osm.length} aus OpenStreetMap/farmshops`;
+    `${own.length} eigene · ${comp.length} Wettbewerber (manuell) · ${osm.length} aus OpenStreetMap/farmshops geladen`;
 
-  // Eigene/manuelle zuerst, automatisch geladene danach (nach Distanz zu Coburg)
-  const sorted = [
-    ...state.machines,
-    ...osm.slice().sort((a, b) =>
-      analyzePoint(a.lat, a.lng).score < analyzePoint(b.lat, b.lng).score ? 1 : -1),
-  ];
+  // Eigene/manuelle zuerst; automatisch geladene nur aus dem aktuellen
+  // Kartenausschnitt und gedeckelt – deutschlandweit wären es tausende.
+  const center = map.getCenter();
+  const bounds = map.getBounds();
+  const osmVisible = osm
+    .filter((m) => bounds.contains([m.lat, m.lng]))
+    .sort((a, b) =>
+      haversineKm(center.lat, center.lng, a.lat, a.lng) -
+      haversineKm(center.lat, center.lng, b.lat, b.lng))
+    .slice(0, 50);
+  const sorted = [...state.machines, ...osmVisible];
 
   $("#machines-list").innerHTML = sorted.map((m) => {
     const fromOsm = m.source === "osm";
@@ -307,11 +320,16 @@ function renderSettingsPanel() {
   $("#set-refresh").value = s.autoRefreshHours;
   $("#set-season").checked = s.applySeasonality;
   $("#set-osm-machines").checked = s.includeOsmMachines;
-  setRefreshStatus(
-    state.lastRefresh
-      ? `Letzte Aktualisierung: ${new Date(state.lastRefresh).toLocaleString("de-DE")} · ${state.overpassPois.length} POIs und ${state.osmMachines.length} Automaten (farmshops-Datenmodell) automatisch geladen · ${state.hiddenOsmIds.length} ausgeblendet`
-      : "Noch keine automatische Aktualisierung erfolgt."
-  );
+
+  const srv = getServerStatus();
+  const modeLine =
+    getMode() === "server"
+      ? `🖥️ Server-Modus: Deutschland-Datenbestand vom ${srv?.updatedAt ? new Date(srv.updatedAt).toLocaleString("de-DE") : "– (erstes Update läuft)"} · ${fmtNum(srv?.machines || 0)} Automaten · ${fmtNum(srv?.regionalPois || 0)} Hofläden/Märkte · ${fmtNum(srv?.population || 0)} Orte`
+      : "🌐 Direkt-Modus (statisches Hosting): Daten werden je Kartenausschnitt live von der Overpass-API geladen.";
+  const localLine = state.lastRefresh
+    ? `Zuletzt geladen: ${new Date(state.lastRefresh).toLocaleString("de-DE")} · ${fmtNum(state.overpassPois.length)} POIs, ${fmtNum(state.osmMachines.length)} Automaten, ${fmtNum(state.populationCenters.length)} Orte im Speicher · ${state.hiddenOsmIds.length} ausgeblendet`
+    : "Noch keine Daten geladen.";
+  setRefreshStatus(modeLine + "\n" + localLine);
 }
 
 // ---------- Globale Aktionen ----------
@@ -371,14 +389,40 @@ function bindGlobalActions() {
       applySeasonality: $("#set-season").checked,
       includeOsmMachines: $("#set-osm-machines").checked,
     });
-    scheduleAutoRefresh();
+    scheduleAutoRefresh(() => map.getBounds());
     alert("Einstellungen gespeichert.");
   });
 
   $("#btn-refresh-now").addEventListener("click", () => {
-    refreshFromOverpass().catch((e) =>
-      setRefreshStatus("❌ Aktualisierung fehlgeschlagen: " + e.message)
-    );
+    refreshNow(map.getBounds()).then((res) => {
+      if (res === "error")
+        setRefreshStatus("❌ Aktualisierung fehlgeschlagen – später erneut versuchen.");
+      else renderSettingsPanel();
+    });
+  });
+
+  const doSearch = async () => {
+    const q = $("#search-input").value.trim();
+    if (!q) return;
+    setDataStatus("⏳ suche…");
+    try {
+      const hit = await geocode(q);
+      if (!hit) {
+        setDataStatus("❓ Ort nicht gefunden");
+        return;
+      }
+      setDataStatus("");
+      map.setView([hit.lat, hit.lng], 13);
+      state.selection = { lat: hit.lat, lng: hit.lng };
+      notify("selection");
+      loadViewport(map.getBounds());
+    } catch {
+      setDataStatus("⚠️ Suche fehlgeschlagen");
+    }
+  };
+  $("#btn-search").addEventListener("click", doSearch);
+  $("#search-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") doSearch();
   });
 
   $("#btn-restore-osm").addEventListener("click", () => {

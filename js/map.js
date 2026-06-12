@@ -2,9 +2,10 @@
  * Leaflet-Karte: Attraktions-Marker, Automaten, Analyse-Radius,
  * Potenzial-Heatmap und Standortvorschläge.
  */
-import { CATEGORIES, POPULATION_CENTERS } from "./data.js";
+import { CATEGORIES } from "./data.js";
 import { state, allAttractions, allMachines, subscribe, notify } from "./store.js";
 import { analyzePoint, scoreGrid, suggestLocations, fmtNum } from "./analysis.js";
+import { loadViewport } from "./api.js";
 
 export let map;
 let attractionLayer, machineLayer, analysisLayer, heatLayer, suggestionLayer, popLayer;
@@ -19,7 +20,9 @@ export function setClickMode(mode, cb) {
 }
 
 export function initMap() {
-  map = L.map("map", { zoomControl: false }).setView([50.2585, 10.9645], 12);
+  // Canvas-Renderer: nötig für tausende Marker bei Deutschland-Abdeckung
+  map = L.map("map", { zoomControl: false, preferCanvas: true })
+    .setView([50.2585, 10.9645], 12);
   L.control.zoom({ position: "bottomright" }).addTo(map);
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -60,13 +63,22 @@ export function initMap() {
   renderPopulation();
 
   subscribe((topic) => {
-    if (["attractions", "refresh:done", "import"].includes(topic)) renderAttractions();
-    if (["machines", "import", "refresh:done", "settings"].includes(topic)) {
+    if (["attractions", "data:merged", "import"].includes(topic)) renderAttractions();
+    if (["machines", "import", "data:merged", "settings"].includes(topic)) {
       renderMachines();
       if (state.selection) renderAnalysis();
     }
+    if (topic === "data:merged") renderPopulation();
     if (topic === "selection" || topic === "settings") renderAnalysis();
   });
+
+  // Deutschlandweit: Daten je Kartenausschnitt nachladen (entprellt)
+  let moveTimer = null;
+  map.on("moveend", () => {
+    clearTimeout(moveTimer);
+    moveTimer = setTimeout(() => loadViewport(map.getBounds()), 400);
+  });
+  loadViewport(map.getBounds());
 }
 
 function markerRadius(visitors) {
@@ -119,7 +131,7 @@ export function renderMachines() {
 
 function renderPopulation() {
   popLayer.clearLayers();
-  for (const p of POPULATION_CENTERS) {
+  for (const p of state.populationCenters) {
     L.circle([p.lat, p.lng], {
       radius: Math.sqrt(p.pop) * 18,
       color: "#64748b",

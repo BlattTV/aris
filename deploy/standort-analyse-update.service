@@ -1,0 +1,6 @@
+[Unit]
+Description=Standort-Analyse: Code-Update aus Git einspielen
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash /opt/standort-analyse/deploy/update.sh

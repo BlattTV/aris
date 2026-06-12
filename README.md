@@ -1,41 +1,75 @@
-# 📍 Standort-Analyse Coburg
+# 📍 Standort-Analyse Deutschland
 
-**Business-Intelligence-Tool für Automaten-Standorte in Coburg & Umkreis (30 km).**
+**Business-Intelligence-Tool für Automaten-Standorte – deutschlandweit.**
 
 Zeigt Attraktionen mit Besucherzahlen auf einer interaktiven Karte, berechnet das
 Kundenpotenzial in frei wählbarem Umkreis, berücksichtigt bestehende Automaten
-(eigene & Wettbewerber) und liefert Umsatz-/Gewinnprognosen, Standort-Scores,
-eine Potenzial-Heatmap und automatische Standortvorschläge.
+(eigene & Wettbewerber, automatisch aus OpenStreetMap/farmshops übernommen) und
+liefert Umsatz-/Gewinnprognosen, Standort-Scores, eine Potenzial-Heatmap und
+automatische Standortvorschläge.
 
-![Tech](https://img.shields.io/badge/Stack-Vanilla_JS_+_Leaflet-22d3ee) ![PWA](https://img.shields.io/badge/PWA-installierbar-34d399) ![Lizenz](https://img.shields.io/badge/Daten-OpenStreetMap-7ebc6f)
+![Tech](https://img.shields.io/badge/Stack-Vanilla_JS_+_Leaflet_+_Node-22d3ee) ![PWA](https://img.shields.io/badge/PWA-installierbar-34d399) ![Lizenz](https://img.shields.io/badge/Daten-OpenStreetMap-7ebc6f)
 
 ---
 
 ## 🚀 Schnellstart
 
-Kein Build, keine Abhängigkeiten – nur ein statischer Webserver:
+### Variante A: Server-Modus (empfohlen, z. B. im LXC-Container)
+
+Node ≥ 18, keine npm-Abhängigkeiten:
 
 ```bash
-# Variante 1: Python
-python3 -m http.server 8080
-
-# Variante 2: Node
-npx serve .
+node server/server.mjs          # läuft auf http://0.0.0.0:8080
 ```
 
-Dann <http://localhost:8080> öffnen. **Hinweis:** Wegen ES-Modulen und
-Service-Worker muss die App über `http(s)://` laufen (nicht `file://`).
+Der Server liefert die Web-App aus, lädt **einmal täglich ganz Deutschland**
+(alle Verkaufsautomaten, Hofläden, Wochenmärkte, Imkereien + Einwohnerzahlen
+aller Städte/Gemeinden aus OSM) in `data/germany.json` und beantwortet die
+Kartenabfragen aus diesem Bestand. Erststart: Das erste Deutschland-Update
+beginnt nach ~10 s und dauert einige Minuten.
 
-Für den Produktivbetrieb genügt jedes statische Hosting
-(GitHub Pages, Netlify, eigener Server). HTTPS ist Voraussetzung für die
-PWA-Installation auf Android.
+Manuelles Datenupdate: `npm run update-data` · Konfiguration über
+Umgebungsvariablen `PORT`, `UPDATE_INTERVAL_H`, `DATA_DIR`.
+
+### Variante B: Statisch (ohne Backend)
+
+```bash
+python3 -m http.server 8080
+```
+
+Die App erkennt automatisch, dass kein Server-API verfügbar ist, und lädt die
+Daten je Kartenausschnitt direkt von der Overpass-API („Direkt-Modus").
+
+## 📦 Hosting im LXC-Container (Proxmox & Co.)
+
+Frischen Debian-/Ubuntu-Container erstellen, dann als root:
+
+```bash
+git clone https://github.com/BlattTV/aris.git /opt/standort-analyse
+bash /opt/standort-analyse/deploy/install-lxc.sh
+```
+
+Das Skript installiert Node, legt einen Systemnutzer an, richtet zwei
+systemd-Units ein und startet alles:
+
+| Unit | Zweck |
+|---|---|
+| `standort-analyse.service` | Web-App + API + tägliches Deutschland-Update |
+| `standort-analyse-update.timer` | zieht alle 15 min Code-Updates per `git pull` und startet bei Änderungen neu |
+
+**Damit landen Änderungen, die hier im Repository gepusht werden, automatisch
+binnen 15 Minuten im Container** – manuell geht es jederzeit mit
+`bash /opt/standort-analyse/deploy/update.sh`. Branch/Repo sind über die
+Variablen `BRANCH`/`REPO_URL` des Install-Skripts steuerbar.
+
+Logs: `journalctl -u standort-analyse -f` · Status: `systemctl status standort-analyse`
 
 ## 🧭 Funktionen
 
 | Funktion | Beschreibung |
 |---|---|
-| **Karte mit Attraktionen** | 22 kuratierte Attraktionen (Veste Coburg, Sambafestival, Thermen, Basilika Vierzehnheiligen …) mit gepflegten Jahresbesucherzahlen, Markergröße ∝ Besucheraufkommen |
-| **Umkreis-Analyse** | Klick auf die Karte → Kundenpotenzial, Umsatz- und Gewinnprognose für 0,3–10 km Radius |
+| **Deutschlandweite Karte** | Ortssuche (Nominatim), Daten werden je Kartenausschnitt nachgeladen; dazu 22 kuratierte Attraktionen der Region Coburg mit gepflegten Besucherzahlen |
+| **Umkreis-Analyse** | Klick auf die Karte → Kundenpotenzial, Umsatz- und Gewinnprognose für 0,3–10 km Radius; Einwohner aus OSM-Bevölkerungsdaten aller deutschen Städte/Gemeinden |
 | **Automaten-Verwaltung** | Eigene & fremde Automaten manuell auf der Karte platzieren – sie fließen als Wettbewerb/Kannibalisierung in jede Berechnung ein |
 | **Ist-Daten-Abgleich** | Realen Monatsumsatz je Automat erfassen → Plan/Ist-Abweichung im Portfolio |
 | **Potenzial-Heatmap** | Raster-Scoring über den Kartenausschnitt (grün/gelb/rot) |
@@ -52,8 +86,9 @@ Das Kundenpotenzial eines Punktes setzt sich zusammen aus:
 
 1. **Besucherströme**: `Σ Besucher × Distanz-Decay × Verweildauer-Gewicht × Saisonfaktor`
    über alle Attraktionen im Radius. Decay = Gravitationsmodell `1/(1+(d/0,8 km)²)`.
-2. **Wohnbevölkerung**: 20 Bevölkerungsschwerpunkte der Region (amtliche
-   Einwohnerzahlen) × Kauffrequenz × Decay.
+2. **Wohnbevölkerung**: OSM-place-Nodes (Städte/Gemeinden/Dörfer mit
+   `population`-Tag, deutschlandweit) × Kauffrequenz × Decay; für die Region
+   Coburg zusätzlich 20 kuratierte amtliche Einwohnerzahlen.
 3. **Capture-Rate**: konfigurierbarer Anteil der Passanten, die tatsächlich kaufen.
 4. **Wettbewerb**: jeder Automat im Radius reduziert den Marktanteil
    anteilig nach Nähe (`Anteil = 1/(1+Σ decay(d_i))`).
@@ -69,72 +104,87 @@ Der Standort-Score (0–100) skaliert logarithmisch; 30 Kunden/Tag ≈ 100 Punkt
 
 ## 🔄 Automatische Datenaktualisierung (inkl. farmshops.eu-Daten)
 
-- POIs (Museen, Freizeitparks, Bäder, Arenen, Einkaufszentren, Kinos …) werden
-  über die **Overpass-API** im 30-km-Umkreis von Coburg geladen und mit
-  heuristischen Besucherzahlen versehen.
-- **farmshops.eu-Datenmodell integriert**: farmshops.eu ist selbst nur eine
-  Aufbereitung von OpenStreetMap-Daten
-  ([Quellcode](https://github.com/CodeforKarlsruhe/farmshops.eu)). Dieses Tool
-  übernimmt dieselbe Abfrage direkt aus der Quelle (OSM/Overpass) – täglich
-  und ohne Umweg:
-  - **Verkaufsautomaten** (`vending=` milk, egg, food, cheese, sausage, meat,
-    potato, noodle, honey, fruit, bread … sowie klassische Snack-/Getränke-/
-    Pizza-/Eisautomaten, ohne Tierfutter) → fließen automatisch als
-    **Wettbewerber in die Potenzialberechnung** ein. Einzelne Automaten lassen
-    sich ausblenden (✕) und in den Einstellungen wiederherstellen; der
-    Schalter „als Wettbewerb einrechnen" deaktiviert sie komplett.
-  - **Hofläden** (`shop=farm`), **Wochenmärkte** (`amenity=marketplace`) und
-    **Imkereien** (`craft=beekeeper`) → erscheinen als Frequenzbringer
-    (Kategorie „Hofladen & Markt").
-- Intervall in den Einstellungen konfigurierbar (Standard: alle 24 h = täglich,
-  beim App-Start wird die Fälligkeit geprüft). Manuell: „🔄 Jetzt aktualisieren".
-- Kuratierte Attraktionen werden bei Namensgleichheit nicht dupliziert;
-  OSM-Automaten in < 50 m Nähe zu manuell erfassten ebenfalls nicht.
+**farmshops.eu-Datenmodell integriert**: farmshops.eu ist selbst nur eine
+Aufbereitung von OpenStreetMap-Daten
+([Quellcode](https://github.com/CodeforKarlsruhe/farmshops.eu)). Dieses Tool
+übernimmt dieselbe Abfrage direkt aus der Quelle (OSM/Overpass):
 
-## 📱 Android-App
+- **Verkaufsautomaten** (`vending=` milk, egg, food, cheese, sausage, meat,
+  potato, noodle, honey, fruit, bread … sowie klassische Snack-/Getränke-/
+  Pizza-/Eisautomaten, ohne Tierfutter) → fließen automatisch als
+  **Wettbewerber in die Potenzialberechnung** ein. Einzelne Automaten lassen
+  sich ausblenden (✕) und wiederherstellen; ein Schalter deaktiviert sie komplett.
+- **Hofläden** (`shop=farm`), **Wochenmärkte** (`amenity=marketplace`) und
+  **Imkereien** (`craft=beekeeper`) → Frequenzbringer (Kategorie „Hofladen & Markt").
+- **Bevölkerung**: alle deutschen `place`-Nodes mit `population`-Tag.
+- **Frequenzbringer-POIs** (Museen, Freizeitparks, Bäder, Arenen, Kinos,
+  Einkaufszentren …) mit heuristischen Besucherzahlen.
 
-Die App ist eine vollwertige **PWA** und damit direkt installierbar:
+**Server-Modus**: Der Node-Server lädt das komplette Deutschland-Datenmodell
+**einmal täglich** (konfigurierbar via `UPDATE_INTERVAL_H`) und hält es in
+`data/germany.json` vor; POI-Tiles werden 24 h gecacht. Ein leerer/fehlgeschlagener
+Update-Lauf überschreibt nie einen guten Bestand. Manuell: Button
+„🔄 Jetzt aktualisieren" (stößt das Server-Update an) oder `npm run update-data`.
 
-1. App unter HTTPS hosten (z. B. GitHub Pages).
-2. Auf dem Android-Gerät in Chrome öffnen → Menü → **„App installieren"**.
-3. Die App läuft danach als eigenständige App mit Icon, Vollbild und Offline-Modus.
+**Direkt-Modus** (statisches Hosting): identische Daten, je Kartenausschnitt
+live von der Overpass-API geladen.
 
-**Für den Google Play Store** (Trusted Web Activity, ~10 Minuten):
+Dubletten-Schutz: kuratierte Attraktionen bei Namensgleichheit, OSM-Automaten
+in < 50 m Nähe zu manuell erfassten.
 
-```bash
-npm i -g @bubblewrap/cli
-bubblewrap init --manifest https://DEINE-DOMAIN/manifest.webmanifest
-bubblewrap build   # erzeugt signierte .aab/.apk für den Play Store
-```
+## 📱 Android-App (APK)
+
+Im Ordner `android/` liegt eine native Android-App (WebView-Wrapper, keine
+externen Abhängigkeiten). Beim ersten Start fragt sie die Adresse deines
+Servers ab (z. B. `http://192.168.1.50:8080` für den LXC-Container im LAN)
+und merkt sie sich; Portfolio-Daten bleiben in der App gespeichert.
+
+**APK bauen lassen (ohne lokales Android-Studio):** Der GitHub-Actions-Workflow
+[`android-apk.yml`](.github/workflows/android-apk.yml) baut bei jedem Push auf
+`android/**` – oder manuell über *Actions → „Android APK bauen" → Run workflow* –
+eine installierbare Debug-APK und legt sie als Artefakt `standort-analyse-apk`
+zum Download ab. Auf dem Handy: APK herunterladen, Installation aus unbekannten
+Quellen erlauben, installieren.
+
+**Lokal bauen:** `cd android && gradle assembleDebug` (Android SDK + Java 17 nötig).
+
+Alternativ ist die Web-App weiterhin eine vollwertige **PWA**: unter HTTPS
+gehostet lässt sie sich in Chrome über „App installieren" ohne APK installieren.
+Für den Play Store: Bubblewrap/TWA (benötigt HTTPS-Domain).
 
 ## 🗂️ Projektstruktur
 
 ```
 index.html              App-Shell & Panels
 css/style.css           Dark-Theme, responsive, Druck-Layout
-js/data.js              Kuratierte Attraktionen, Bevölkerung, Saisonfaktoren
-js/store.js             State + localStorage-Persistenz + Import/Export
+js/data.js              Kuratierte Attraktionen, Bevölkerung (Seed), Saisonfaktoren
+js/queries.mjs          Gemeinsame Overpass-Abfragen + Parsing (Client & Server)
+js/api.js               Datenprovider: Server-API oder direkter Overpass-Zugriff
+js/store.js             State + localStorage-Persistenz + Merge + Import/Export
 js/analysis.js          Analyse-Engine (Gravitationsmodell, Scoring, Vorschläge)
-js/overpass.js          Auto-Aktualisierung über OpenStreetMap Overpass-API
-js/map.js               Leaflet-Karte, Layer, Heatmap, Pins
-js/ui.js                Panels, Dashboard, Export, Berichte
+js/map.js               Leaflet-Karte, Layer, Heatmap, Viewport-Nachladen
+js/ui.js                Panels, Dashboard, Suche, Export, Berichte
 js/charts.js            Abhängigkeitsfreie Canvas-Charts
 sw.js                   Service Worker (offline / PWA)
-manifest.webmanifest    PWA-Manifest (Android-Installation)
+manifest.webmanifest    PWA-Manifest
+server/server.mjs       Node-Server: Statik + API + tägliches Deutschland-Update
+server/update-data.mjs  Standalone-Datenupdate (Cron-tauglich)
+deploy/                 LXC-Installation, systemd-Units, Git-Auto-Update
+android/                Android-App (WebView), APK via GitHub Actions
 ```
 
 ## 🛣️ Roadmap zur Skalierung
 
-Das Tool ist bewusst serverlos gestartet (null Betriebskosten, sofort
-einsetzbar). Ausbaustufen Richtung Multi-Region/Multi-User-Plattform:
+Erreicht: ✅ deutschlandweite Abdeckung, ✅ eigener Server mit täglicher
+Datenpflege, ✅ Android-App. Nächste Ausbaustufen:
 
-1. **Backend & Sync** – Postgres/PostGIS + REST-API; Team-Accounts statt
-   localStorage; Audit-Log.
-2. **Echte Frequenzdaten** – Anbindung von Mobilfunk-Bewegungsdaten,
-   Google Popular Times, Veranstaltungskalendern und Telemetrie der eigenen
-   Automaten (Verkäufe je Stunde) zur automatischen Modell-Kalibrierung.
-3. **Beliebige Regionen** – Geocoding + Zensus-Rasterdaten (100 m-Gitter)
-   statt kuratierter Ortsliste; das Rechenmodell ist bereits regionsneutral.
+1. **Team-Accounts & Sync** – Portfolio serverseitig statt localStorage
+   (Postgres/PostGIS), Login, Audit-Log, Mehrgeräte-Sync.
+2. **Echte Frequenzdaten** – Mobilfunk-Bewegungsdaten, Google Popular Times,
+   Veranstaltungskalender und Telemetrie der eigenen Automaten (Verkäufe je
+   Stunde) zur automatischen Modell-Kalibrierung.
+3. **Zensus-Rasterdaten** – 100 m-Bevölkerungsgitter statt place-Nodes für
+   präzisere Einzugsgebiete.
 4. **Routenoptimierung** – Befüllungstouren (TSP) über das eigene Portfolio.
 5. **ML-Forecasting** – Umsatzprognose je Standort aus Ist-Daten
    (Plan/Ist-Erfassung ist als Trainingsdaten-Grundlage schon eingebaut).
