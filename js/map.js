@@ -92,6 +92,11 @@ export function initMap() {
     clearTimeout(moveTimer);
     moveTimer = setTimeout(() => loadViewport(map.getBounds()), 400);
   });
+  // Cluster hängen von der Zoomstufe ab → bei Zoomwechsel neu aufbauen
+  map.on("zoomend", () => {
+    renderAttractions();
+    renderMachines();
+  });
   loadViewport(map.getBounds());
 }
 
@@ -99,9 +104,47 @@ function markerRadius(visitors) {
   return Math.max(6, Math.min(26, Math.log10(Math.max(visitors, 100)) * 4 - 8));
 }
 
+/**
+ * Leichtgewichtiges Grid-Clustering (ohne Zusatzbibliothek): Punkte werden
+ * je Zoomstufe in Bildschirm-Rasterzellen (~56 px) gruppiert. Zellen mit
+ * einem Punkt rendern normal, Zellen mit mehreren als „+N"-Cluster.
+ * Beim Hineinzoomen lösen sich die Cluster von selbst auf.
+ */
+function clusterize(items, pixelCell = 56) {
+  const zoom = map.getZoom();
+  const degPerPx = 360 / (256 * Math.pow(2, zoom));
+  const cell = pixelCell * degPerPx;
+  const cells = new Map();
+  for (const it of items) {
+    const key = `${Math.floor(it.lat / cell)}|${Math.floor(it.lng / cell)}`;
+    if (!cells.has(key)) cells.set(key, []);
+    cells.get(key).push(it);
+  }
+  const singles = [], clusters = [];
+  for (const group of cells.values()) {
+    if (group.length === 1) {
+      singles.push(group[0]);
+    } else {
+      clusters.push({
+        lat: group.reduce((s, x) => s + x.lat, 0) / group.length,
+        lng: group.reduce((s, x) => s + x.lng, 0) / group.length,
+        count: group.length,
+        items: group,
+      });
+    }
+  }
+  return { singles, clusters };
+}
+
+function zoomIntoCluster(c) {
+  map.setView([c.lat, c.lng], Math.min(map.getZoom() + 2, 17));
+}
+
 export function renderAttractions() {
   attractionLayer.clearLayers();
-  for (const a of allAttractions()) {
+  const { singles, clusters } = clusterize(allAttractions(), 48);
+
+  for (const a of singles) {
     const cat = CATEGORIES[a.cat] || CATEGORIES.freizeit;
     const marker = L.circleMarker([a.lat, a.lng], {
       radius: markerRadius(a.visitors),
@@ -118,11 +161,28 @@ export function renderAttractions() {
       <button class="popup-btn" data-analyze="${a.lat},${a.lng}">📍 Hier analysieren</button>
     `);
   }
+
+  for (const c of clusters) {
+    const top = c.items.reduce((m, x) => (x.visitors > m.visitors ? x : m));
+    const visitors = c.items.reduce((s, x) => s + x.visitors, 0);
+    L.circleMarker([c.lat, c.lng], {
+      radius: Math.min(26, markerRadius(visitors) + 4),
+      color: "#94a3b8",
+      weight: 2,
+      fillColor: (CATEGORIES[top.cat] || CATEGORIES.freizeit).color,
+      fillOpacity: 0.45,
+    })
+      .bindTooltip(`+${c.count} Attraktionen · ${fmtNum(visitors)} Besucher/Jahr · Top: ${top.name}`)
+      .on("click", () => zoomIntoCluster(c))
+      .addTo(attractionLayer);
+  }
 }
 
 export function renderMachines() {
   machineLayer.clearLayers();
-  for (const m of allMachines()) {
+  const { singles, clusters } = clusterize(allMachines(), 56);
+
+  for (const m of singles) {
     const fromOsm = m.source === "osm";
     const icon = L.divIcon({
       className: "machine-icon",
@@ -139,6 +199,20 @@ export function renderMachines() {
         ${m.note ? m.note + "<br>" : ""}
         <button class="popup-btn" data-analyze="${m.lat},${m.lng}">📍 Standort analysieren</button>
       `)
+      .addTo(machineLayer);
+  }
+
+  for (const c of clusters) {
+    const own = c.items.filter((x) => !x.isCompetitor).length;
+    const icon = L.divIcon({
+      className: "machine-icon",
+      html: `<div class="cluster-pin${own ? " has-own" : ""}">🥤<span>+${c.count}</span></div>`,
+      iconSize: [40, 26],
+      iconAnchor: [20, 13],
+    });
+    L.marker([c.lat, c.lng], { icon })
+      .bindTooltip(`${c.count} Automaten${own ? ` (davon ${own} eigene)` : ""} – klicken zum Hineinzoomen`)
+      .on("click", () => zoomIntoCluster(c))
       .addTo(machineLayer);
   }
 }

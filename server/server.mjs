@@ -162,6 +162,8 @@ export async function updateGermany() {
 function scheduleUpdates() {
   const due = () => {
     if (!germany.updatedAt) return true;
+    // Altbestand aus einer Version ohne Attraktions-Sync → sofort nachladen
+    if (germany.machines.length && !(germany.pois?.length)) return true;
     return (Date.now() - new Date(germany.updatedAt).getTime()) / 36e5 >= UPDATE_INTERVAL_H;
   };
   const tick = () => { if (due()) updateGermany(); };
