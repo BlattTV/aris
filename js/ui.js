@@ -548,7 +548,7 @@ function renderSettingsPanel() {
   const srv = getServerStatus();
   const modeLine =
     getMode() === "server"
-      ? `🖥️ Server-Modus: Deutschland-Datenbestand vom ${srv?.updatedAt ? new Date(srv.updatedAt).toLocaleString("de-DE") : "– (erstes Update läuft)"} · ${fmtNum(srv?.machines || 0)} Automaten · ${fmtNum(srv?.regionalPois || 0)} Hofläden/Märkte · ${fmtNum(srv?.population || 0)} Orte`
+      ? `🖥️ Server-Modus: Deutschland-Datenbestand vom ${srv?.updatedAt ? new Date(srv.updatedAt).toLocaleString("de-DE") : "– (erstes Update läuft)"} · ${fmtNum(srv?.machines || 0)} Automaten · ${fmtNum(srv?.regionalPois || 0)} Hofläden/Märkte · ${fmtNum(srv?.pois || 0)} Attraktionen · ${fmtNum(srv?.population || 0)} Orte`
       : "🌐 Direkt-Modus (statisches Hosting): Daten werden je Kartenausschnitt live von der Overpass-API geladen.";
   const localLine = state.lastRefresh
     ? `Zuletzt geladen: ${new Date(state.lastRefresh).toLocaleString("de-DE")} · ${fmtNum(state.overpassPois.length)} POIs, ${fmtNum(state.osmMachines.length)} Automaten, ${fmtNum(state.populationCenters.length)} Orte im Speicher · ${state.hiddenOsmIds.length} ausgeblendet`

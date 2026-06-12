@@ -138,7 +138,7 @@ async function renderOps() {
     const st = await call("api/status");
     $("#ops-status").textContent =
       `Deutschland-Datenbestand: ${st.updatedAt ? fmtDateTime(st.updatedAt) : "noch keiner"} · ` +
-      `${st.machines} Automaten · ${st.regionalPois} Hofläden/Märkte · ${st.population} Orte · ` +
+      `${st.machines} Automaten · ${st.regionalPois} Hofläden/Märkte · ${st.pois || 0} Attraktionen · ${st.population} Orte · ` +
       `Update-Intervall ${st.updateIntervalHours} h${st.updateRunning ? " · ⏳ Update läuft gerade" : ""}`;
   } catch { /* Status optional */ }
 }

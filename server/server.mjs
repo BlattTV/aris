@@ -19,7 +19,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   OVERPASS_URL, buildBboxQuery, buildGermanyFarmshopsQuery,
-  buildGermanyPopulationQuery, parseElements, inBbox, parseBboxParam,
+  buildGermanyPoisQuery, buildGermanyPopulationQuery,
+  parseElements, inBbox, parseBboxParam,
 } from "../js/queries.mjs";
 import { initAuth, handleAuthRoute, getUser, licenseState } from "./auth.mjs";
 import { initPortfolio, handlePortfolioRoute } from "./portfolio.mjs";
@@ -53,15 +54,16 @@ const MIME = {
 
 // ---------- Deutschland-Datenbestand ----------
 
-let germany = { updatedAt: null, machines: [], regionalPois: [], population: [] };
+let germany = { updatedAt: null, machines: [], regionalPois: [], pois: [], population: [] };
 let updateRunning = false;
 
 async function loadGermany() {
   try {
     germany = JSON.parse(await fs.readFile(GERMANY_FILE, "utf8"));
+    germany.pois = germany.pois || []; // ältere Datenbestände kennen das Feld nicht
     log(`Deutschland-Datenbestand geladen: ${germany.machines.length} Automaten, ` +
-        `${germany.regionalPois.length} Hofläden/Märkte, ${germany.population.length} Orte ` +
-        `(Stand ${germany.updatedAt})`);
+        `${germany.regionalPois.length} Hofläden/Märkte, ${germany.pois.length} Attraktionen, ` +
+        `${germany.population.length} Orte (Stand ${germany.updatedAt})`);
   } catch {
     log("Noch kein Deutschland-Datenbestand vorhanden – wird beim ersten Update erzeugt.");
   }
@@ -83,7 +85,13 @@ async function overpass(query, label) {
   return json.elements || [];
 }
 
-/** Nächtliches Komplett-Update: ganz Deutschland (dauert einige Minuten). */
+/**
+ * Nächtliches Komplett-Update: ganz Deutschland (dauert einige Minuten).
+ * Drei Teil-Abfragen (farmshops-Modell, Attraktionen, Bevölkerung) laufen
+ * unabhängig: schlägt eine fehl, bleibt deren alter Bestand erhalten.
+ * Plausibilitätsschutz: ein verdächtig leeres Ergebnis überschreibt nie
+ * einen vorhandenen guten Datenbestand.
+ */
 export async function updateGermany() {
   if (updateRunning) {
     log("Update läuft bereits – übersprungen.");
@@ -91,32 +99,57 @@ export async function updateGermany() {
   }
   updateRunning = true;
   try {
-    const farmshopElements = await overpass(
-      buildGermanyFarmshopsQuery(), "farmshops-Datenmodell Deutschland");
-    const popElements = await overpass(
-      buildGermanyPopulationQuery(), "Bevölkerung Deutschland");
+    const next = { ...germany };
+    let okParts = 0;
 
-    const parsed = parseElements(farmshopElements);
-    const population = parseElements(popElements).population;
-
-    // Plausibilitätsschutz: ein fehlgeschlagener/leerer Lauf darf einen
-    // vorhandenen guten Datenbestand nicht überschreiben.
-    if (parsed.machines.length < 100 && germany.machines.length > 1000) {
-      throw new Error("Update verworfen: verdächtig wenig Automaten erhalten");
+    try {
+      const parsed = parseElements(await overpass(
+        buildGermanyFarmshopsQuery(), "farmshops-Datenmodell Deutschland"));
+      if (parsed.machines.length < 100 && germany.machines.length > 1000) {
+        throw new Error("verdächtig wenig Automaten erhalten");
+      }
+      next.machines = parsed.machines;
+      next.regionalPois = parsed.pois; // shop=farm, marketplace, beekeeper
+      okParts++;
+    } catch (e) {
+      log("⚠️ Teil-Update farmshops fehlgeschlagen: " + e.message);
     }
 
-    germany = {
-      updatedAt: new Date().toISOString(),
-      machines: parsed.machines,
-      regionalPois: parsed.pois, // shop=farm, marketplace, beekeeper
-      population,
-    };
+    try {
+      const parsed = parseElements(await overpass(
+        buildGermanyPoisQuery(), "Attraktionen Deutschland"));
+      if (parsed.pois.length < 500 && (germany.pois?.length || 0) > 5000) {
+        throw new Error("verdächtig wenige Attraktionen erhalten");
+      }
+      next.pois = parsed.pois;
+      okParts++;
+    } catch (e) {
+      log("⚠️ Teil-Update Attraktionen fehlgeschlagen: " + e.message);
+    }
+
+    try {
+      const population = parseElements(await overpass(
+        buildGermanyPopulationQuery(), "Bevölkerung Deutschland")).population;
+      if (population.length < 500 && germany.population.length > 5000) {
+        throw new Error("verdächtig wenige Orte erhalten");
+      }
+      next.population = population;
+      okParts++;
+    } catch (e) {
+      log("⚠️ Teil-Update Bevölkerung fehlgeschlagen: " + e.message);
+    }
+
+    if (!okParts) throw new Error("alle Teil-Abfragen fehlgeschlagen");
+
+    next.updatedAt = new Date().toISOString();
+    germany = next;
     await fs.mkdir(DATA_DIR, { recursive: true });
     const tmp = GERMANY_FILE + ".tmp";
     await fs.writeFile(tmp, JSON.stringify(germany));
     await fs.rename(tmp, GERMANY_FILE);
-    log(`✅ Deutschland-Update fertig: ${germany.machines.length} Automaten, ` +
-        `${germany.regionalPois.length} Hofläden/Märkte, ${germany.population.length} Orte`);
+    log(`✅ Deutschland-Update fertig (${okParts}/3 Teile): ${germany.machines.length} Automaten, ` +
+        `${germany.regionalPois.length} Hofläden/Märkte, ${germany.pois.length} Attraktionen, ` +
+        `${germany.population.length} Orte`);
     return true;
   } catch (e) {
     log("❌ Deutschland-Update fehlgeschlagen: " + e.message);
@@ -273,6 +306,7 @@ const server = http.createServer(async (req, res) => {
         updateRunning,
         machines: germany.machines.length,
         regionalPois: germany.regionalPois.length,
+        pois: germany.pois?.length || 0,
         population: germany.population.length,
         updateIntervalHours: UPDATE_INTERVAL_H,
       });
@@ -333,10 +367,19 @@ const server = http.createServer(async (req, res) => {
         }
         return sendJson(res, 200, germany.population.filter((x) => inBbox(x, bbox)));
       }
-      // /api/pois: Tile-Cache + regionale POIs aus dem Deutschland-Bestand
-      const pois = await getPois(bbox);
+      // /api/pois: Attraktionen aus dem nächtlich synchronisierten
+      // Deutschland-Bestand (sonst Tile-Cache) + regionale POIs
+      const pois = germany.pois?.length
+        ? germany.pois.filter((x) => inBbox(x, bbox))
+        : await getPois(bbox);
       const regional = germany.regionalPois.filter((x) => inBbox(x, bbox));
-      return sendJson(res, 200, [...pois, ...regional]);
+      let combined = [...pois, ...regional];
+      // Deckelung für Ballungsräume: die besucherstärksten zuerst
+      if (combined.length > 6000) {
+        combined.sort((a, b) => b.visitors - a.visitors);
+        combined = combined.slice(0, 6000);
+      }
+      return sendJson(res, 200, combined);
     }
 
     if (p === "/api/refresh" && req.method === "POST") {

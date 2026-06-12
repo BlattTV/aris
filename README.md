@@ -208,11 +208,16 @@ Aufbereitung von OpenStreetMap-Daten
 - **Frequenzbringer-POIs** (Museen, Freizeitparks, Bäder, Arenen, Kinos,
   Einkaufszentren …) mit heuristischen Besucherzahlen.
 
-**Server-Modus**: Der Node-Server lädt das komplette Deutschland-Datenmodell
-**einmal täglich** (konfigurierbar via `UPDATE_INTERVAL_H`) und hält es in
-`data/germany.json` vor; POI-Tiles werden 24 h gecacht. Ein leerer/fehlgeschlagener
-Update-Lauf überschreibt nie einen guten Bestand. Manuell: Button
-„🔄 Jetzt aktualisieren" (stößt das Server-Update an) oder `npm run update-data`.
+**Server-Modus**: Der Node-Server lädt **einmal täglich ganz Deutschland**
+(konfigurierbar via `UPDATE_INTERVAL_H`) in `data/germany.json`:
+Verkaufsautomaten, Hofläden/Märkte, **alle Attraktionen** (Museen, Galerien,
+Freizeitparks, Zoos, Aussichtspunkte, Bäder, Arenen, Theater, Kinos,
+Einkaufszentren) und Bevölkerung. Die drei Teil-Abfragen laufen unabhängig –
+schlägt eine fehl, bleibt ihr alter Bestand erhalten; verdächtig leere
+Ergebnisse überschreiben nie einen guten Bestand. Solange noch kein
+Attraktions-Bestand existiert, dient ein 24-h-Tile-Cache je Kartenausschnitt
+als Fallback. Manuell: Button „🔄 Jetzt aktualisieren" (Admin) oder
+`npm run update-data`.
 
 **Direkt-Modus** (statisches Hosting): identische Daten, je Kartenausschnitt
 live von der Overpass-API geladen.

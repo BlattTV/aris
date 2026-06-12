@@ -43,6 +43,9 @@ const POI_SELECTORS = [
   `nwr["craft"="beekeeper"]`,
 ];
 
+// Frequenzbringer ohne das farmshops-Set (das steckt in der eigenen Abfrage)
+const TOURISM_SELECTORS = POI_SELECTORS.slice(0, 4);
+
 const MACHINE_SELECTOR =
   `nwr["amenity"="vending_machine"]["vending"~"${VENDING_REGEX}"]["vending"!~"animal_food"]`;
 
@@ -69,6 +72,16 @@ area["ISO3166-1"="DE"][admin_level=2]->.de;
   nwr["shop"="farm"](area.de);
   nwr["amenity"="marketplace"](area.de);
   nwr["craft"="beekeeper"](area.de);
+);
+out center tags;`;
+}
+
+/** Deutschland-Komplettabfrage aller Attraktionen/Frequenzbringer (Server, nächtlich). */
+export function buildGermanyPoisQuery() {
+  return `[out:json][timeout:900][maxsize:1073741824];
+area["ISO3166-1"="DE"][admin_level=2]->.de;
+(
+  ${TOURISM_SELECTORS.map((s) => s + "(area.de)").join(";\n  ")};
 );
 out center tags;`;
 }
