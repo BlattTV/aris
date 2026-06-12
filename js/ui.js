@@ -239,7 +239,7 @@ function renderMachinesPanel() {
 
   $("#machines-list").innerHTML = sorted.map((m) => {
     const fromOsm = m.source === "osm";
-    const r = analyzePoint(m.lat, m.lng);
+    const r = analyzePoint(m.lat, m.lng, undefined, { excludeMachineId: m.id });
     return `<li class="card" data-goto="${m.lat},${m.lng}">
       <div class="card-head">
         <strong>${fromOsm ? "🧺" : "🥤"} ${m.name}</strong>
@@ -311,7 +311,7 @@ function renderDashboard() {
   const own = state.machines.filter((m) => !m.isCompetitor);
   let totalRevenue = 0, totalProfit = 0, totalCustomers = 0, actualMonthly = 0;
   for (const m of own) {
-    const r = analyzePoint(m.lat, m.lng);
+    const r = analyzePoint(m.lat, m.lng, undefined, { excludeMachineId: m.id });
     totalRevenue += r.revenueYear;
     totalProfit += r.netProfitYear;
     totalCustomers += r.customersYear;
@@ -384,7 +384,7 @@ function renderDashboard() {
 
   // Ranking eigener Standorte
   const ranked = own
-    .map((m) => ({ m, r: analyzePoint(m.lat, m.lng) }))
+    .map((m) => ({ m, r: analyzePoint(m.lat, m.lng, undefined, { excludeMachineId: m.id }) }))
     .sort((a, b) => b.r.netProfitYear - a.r.netProfitYear);
   $("#dash-ranking").innerHTML = ranked.map(({ m, r }, i) => `
     <li class="card">
@@ -714,7 +714,7 @@ function bindGlobalActions() {
   $("#btn-export-csv").addEventListener("click", () => {
     const rows = [["Name", "Typ", "Eigen/Wettbewerb", "Quelle", "Lat", "Lng", "Score", "Kunden/Tag", "Umsatz-Plan €/Jahr", "Gewinn-Plan €/Jahr", "Ist-Umsatz €/Monat"]];
     for (const m of allMachines()) {
-      const r = analyzePoint(m.lat, m.lng);
+      const r = analyzePoint(m.lat, m.lng, undefined, { excludeMachineId: m.id });
       rows.push([m.name, m.type, m.isCompetitor ? "Wettbewerb" : "Eigen",
         m.source === "osm" ? "OpenStreetMap" : "manuell",
         m.lat.toFixed(5), m.lng.toFixed(5), r.score,

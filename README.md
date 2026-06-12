@@ -172,15 +172,29 @@ Logs: `journalctl -u standort-analyse -f` · Status: `systemctl status standort-
 
 Das Kundenpotenzial eines Punktes setzt sich zusammen aus:
 
-1. **Besucherströme**: `Σ Besucher × Distanz-Decay × Verweildauer-Gewicht × Saisonfaktor`
-   über alle Attraktionen im Radius. Decay = Gravitationsmodell `1/(1+(d/0,8 km)²)`.
-2. **Wohnbevölkerung**: OSM-place-Nodes (Städte/Gemeinden/Dörfer mit
-   `population`-Tag, deutschlandweit) × Kauffrequenz × Decay; für die Region
-   Coburg zusätzlich 20 kuratierte amtliche Einwohnerzahlen.
-3. **Capture-Rate**: konfigurierbarer Anteil der Passanten, die tatsächlich kaufen.
-4. **Wettbewerb**: jeder Automat im Radius reduziert den Marktanteil
-   anteilig nach Nähe (`Anteil = 1/(1+Σ decay(d_i))`).
-5. **Wirtschaftlichkeit**: Umsatz = Kunden × Ø-Bon; Gewinn = Umsatz × Marge − Betriebskosten.
+1. **Besucherströme**: `Σ Besucher × Distanz-Decay × Verweildauer-Gewicht ×
+   Saisonfaktor × Kaufneigung × Massenstrom-Abschlag` über alle Attraktionen
+   im Radius. Decay = Gravitationsmodell `1/(1+(d/0,8 km)²)`. Die Kaufneigung
+   ist je Kategorie gewichtet (Campus/Bad/Arena = Stammpublikum kauft viel,
+   diffuse Innenstadt-Ströme wenig); sehr große Ströme werden sublinear
+   abgeschlagen (nur ein Teil läuft am einzelnen Gerät vorbei).
+2. **Wohnbevölkerung**: OSM-place-Nodes inkl. Stadtteile (`population`-Tag)
+   bzw. Zensus-Raster. Orte haben eine populationsabhängige **Ausdehnung** –
+   auch ohne Zentrums-Node im Radius zählt das Stadtgebiet (kein „0 Einwohner"
+   mehr mitten in der Großstadt). Kauffrequenz: Branchenschnitt ≈ 13
+   Automatenkäufe je Einwohner/Jahr, davon entfällt modellseitig ein kleiner
+   Anteil auf das einzelne Gerät; Dichte-Deckel begrenzt die Reichweite.
+3. **Capture-Rate**: Basis-Anteil der Passanten, die kaufen (Default 0,4 %,
+   kalibriert an realen Automaten-Umsätzen, z. B. Campus-Standort ≈ 20 k€/Jahr).
+4. **Wettbewerb**: jeder Automat im Radius reduziert den Marktanteil anteilig
+   nach Nähe (`Anteil = 1/(1+Σ decay(d_i))`); ein bestehender eigener Automat
+   ist bei der Bewertung seines eigenen Standorts ausgenommen.
+5. **Sättigung**: weicher Durchsatz-Deckel bei ~60 Kunden/Tag je Gerät.
+6. **Wirtschaftlichkeit**: Umsatz = Kunden × Ø-Bon; Gewinn = Umsatz × Marge − Betriebskosten.
+
+Beim Update bestehender Installationen werden die Modell-Parameter automatisch
+auf die neuen kalibrierten Defaults migriert (individuelle Werte wie Ø-Bon,
+Radius oder Kosten bleiben erhalten).
 
 Alle Parameter (Capture-Rate, Ø-Bon, Marge, Betriebskosten, Kauffrequenz) sind
 unter **⚙️ Einstellungen** an das eigene Geschäftsmodell anpassbar.

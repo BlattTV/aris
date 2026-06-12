@@ -2,8 +2,22 @@
  * Zentraler Anwendungs-Store mit localStorage-Persistenz,
  * Event-System und Import/Export.
  */
-import { SEED_ATTRACTIONS, POPULATION_CENTERS, DEFAULT_SETTINGS } from "./data.js";
+import { SEED_ATTRACTIONS, POPULATION_CENTERS, DEFAULT_SETTINGS, SETTINGS_VERSION } from "./data.js";
 import { haversineKm } from "./queries.mjs";
+
+/**
+ * Modell-Parameter älterer Stände auf die aktuell kalibrierten Defaults
+ * heben (greift bei localStorage UND beim Portfolio-Sync vom Server).
+ */
+function migrateSettings(s) {
+  const merged = { ...DEFAULT_SETTINGS, ...(s || {}) };
+  if ((s?._v || 1) < SETTINGS_VERSION) {
+    merged.captureRatePct = DEFAULT_SETTINGS.captureRatePct;
+    merged.residentBuysPerYear = DEFAULT_SETTINGS.residentBuysPerYear;
+    merged._v = SETTINGS_VERSION;
+  }
+  return merged;
+}
 
 const LS_KEY = "coburg-analyzer-v1";
 
@@ -41,7 +55,7 @@ export function load() {
       const saved = JSON.parse(raw);
       state.machines = saved.machines || [];
       state.events = saved.events || [];
-      state.settings = { ...DEFAULT_SETTINGS, ...(saved.settings || {}) };
+      state.settings = migrateSettings(saved.settings);
       state.lastRefresh = saved.lastRefresh || null;
       state.hiddenOsmIds = saved.hiddenOsmIds || [];
       if (saved.customAttractions) {
@@ -94,7 +108,7 @@ export function applyPortfolioDoc(doc) {
   try {
     if (Array.isArray(doc.machines)) state.machines = doc.machines;
     if (Array.isArray(doc.events)) state.events = doc.events;
-    if (doc.settings) state.settings = { ...DEFAULT_SETTINGS, ...doc.settings };
+    if (doc.settings) state.settings = migrateSettings(doc.settings);
     if (Array.isArray(doc.hiddenOsmIds)) state.hiddenOsmIds = doc.hiddenOsmIds;
     if (Array.isArray(doc.customAttractions)) {
       state.attractions = state.attractions.filter((a) => a.source !== "manuell");
@@ -305,7 +319,7 @@ export function exportJson() {
 export function importJson(text) {
   const data = JSON.parse(text);
   if (Array.isArray(data.machines)) state.machines = data.machines;
-  if (data.settings) state.settings = { ...DEFAULT_SETTINGS, ...data.settings };
+  if (data.settings) state.settings = migrateSettings(data.settings);
   if (Array.isArray(data.hiddenOsmIds)) state.hiddenOsmIds = data.hiddenOsmIds;
   if (Array.isArray(data.customAttractions)) {
     state.attractions = state.attractions.filter((a) => a.source !== "manuell");

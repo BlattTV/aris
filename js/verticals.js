@@ -9,7 +9,7 @@ export const VERTICALS = {
   automaten: {
     label: "Verkaufsautomaten",
     unit: "Automat", unitPlural: "Automaten", icon: "🥤",
-    defaults: { captureRatePct: 1.5, avgTicketEur: 3.5, marginPct: 45, opexPerMachineMonth: 180, residentBuysPerYear: 6 },
+    defaults: { captureRatePct: 0.4, avgTicketEur: 3.5, marginPct: 45, opexPerMachineMonth: 180, residentBuysPerYear: 13 },
   },
   foodtruck: {
     label: "Foodtrucks",

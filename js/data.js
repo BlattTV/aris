@@ -14,6 +14,7 @@ export const CATEGORIES = {
   sport:   { label: "Sport & Arena", color: "#fb923c", icon: "⚽" },
   einkauf: { label: "Einkauf & Zentrum", color: "#facc15", icon: "🛍️" },
   regional:{ label: "Hofladen & Markt", color: "#a3e635", icon: "🧑‍🌾" },
+  bildung: { label: "Bildung & Campus", color: "#f87171", icon: "🎓" },
 };
 
 // Saisonfaktoren je Monat (Index 0 = Januar). Kalibriert auf fränkische
@@ -27,6 +28,8 @@ export const SEASONALITY = {
   sport:    [1.2, 1.2, 1.1, 1.0, 0.8, 0.6, 0.5, 0.8, 1.1, 1.2, 1.3, 1.2],
   einkauf:  [0.9, 0.8, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.1, 1.2, 1.5],
   regional: [0.7, 0.7, 0.9, 1.1, 1.2, 1.2, 1.2, 1.2, 1.2, 1.1, 0.8, 1.0],
+  // Vorlesungszeit: Einbruch in der vorlesungsfreien Zeit (Aug/Sep, März)
+  bildung:  [1.2, 1.1, 0.7, 1.1, 1.2, 1.2, 1.0, 0.4, 0.5, 1.2, 1.3, 1.0],
 };
 
 export const SEED_ATTRACTIONS = [
@@ -112,12 +115,19 @@ export const POPULATION_CENTERS = [
   { name: "Itzgrund", lat: 50.1670, lng: 10.9230, pop: 3000 },
 ];
 
+// Version der Modell-Parameter: bei Erhöhung werden die Kennzahlen-Defaults
+// bestehender Installationen auf die neuen kalibrierten Werte migriert.
+export const SETTINGS_VERSION = 2;
+
 export const DEFAULT_SETTINGS = {
+  _v: SETTINGS_VERSION,
   radiusKm: 2.0,
-  // Anteil der Besucher/Passanten, die zu Automaten-Kunden werden (%)
-  captureRatePct: 1.5,
-  // Wie oft kauft ein Einwohner im Einzugsgebiet pro Jahr (Frequenz)
-  residentBuysPerYear: 6,
+  // Anteil der Besucher/Passanten, die zu Automaten-Kunden werden (%).
+  // Kalibriert an realen Automaten-Umsätzen (Campus-Standort ≈ 20 k€/Jahr).
+  captureRatePct: 0.4,
+  // Automatenkäufe je Einwohner und Jahr (Branchenschnitt DE ≈ 13;
+  // der Anteil eines einzelnen Automaten daran steckt im Modell)
+  residentBuysPerYear: 13,
   // Durchschnittlicher Bon je Kauf (€)
   avgTicketEur: 3.5,
   // Marge auf den Umsatz (%)

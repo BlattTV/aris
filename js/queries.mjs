@@ -15,7 +15,17 @@ export const VISITOR_ESTIMATES = {
   theme_park: 80000, zoo: 60000, viewpoint: 8000,
   water_park: 120000, swimming_pool: 40000, sports_centre: 30000,
   stadium: 40000, mall: 600000, theatre: 30000, cinema: 90000,
+  university: 250000, college: 60000,
   farm: 8000, marketplace: 60000, beekeeper: 2000,
+};
+
+// Typische Verweildauer in Minuten je OSM-Typ (Kaufwahrscheinlichkeit)
+export const DWELL_ESTIMATES = {
+  museum: 90, gallery: 60, attraction: 45, theme_park: 300, zoo: 240,
+  viewpoint: 20, water_park: 200, swimming_pool: 120, sports_centre: 90,
+  stadium: 150, mall: 90, theatre: 150, cinema: 140,
+  university: 300, college: 240,
+  farm: 20, marketplace: 60, beekeeper: 15,
 };
 
 // vending-Werte wie bei farmshops.eu plus klassische Snack-/Getränkeautomaten
@@ -37,6 +47,7 @@ const POI_SELECTORS = [
   `nwr["tourism"~"museum|gallery|attraction|theme_park|zoo|viewpoint"]`,
   `nwr["leisure"~"water_park|sports_centre|stadium"]`,
   `nwr["amenity"~"theatre|cinema"]`,
+  `nwr["amenity"~"university|college"]`,
   `nwr["shop"="mall"]`,
   `nwr["shop"="farm"]`,
   `nwr["amenity"="marketplace"]`,
@@ -44,12 +55,14 @@ const POI_SELECTORS = [
 ];
 
 // Frequenzbringer ohne das farmshops-Set (das steckt in der eigenen Abfrage)
-const TOURISM_SELECTORS = POI_SELECTORS.slice(0, 4);
+const TOURISM_SELECTORS = POI_SELECTORS.slice(0, 5);
 
 const MACHINE_SELECTOR =
   `nwr["amenity"="vending_machine"]["vending"~"${VENDING_REGEX}"]["vending"!~"animal_food"]`;
 
-const PLACE_SELECTOR = `node["place"~"city|town|village"]["population"]`;
+// Auch Stadtteile/Bezirke mit Einwohnerzahl – wichtig in Großstädten,
+// deren Zentrums-Node sonst außerhalb des Analyse-Radius liegt
+const PLACE_SELECTOR = `node["place"~"city|town|village|suburb|borough|quarter|hamlet"]["population"]`;
 
 /** Viewport-Abfrage: POIs + Automaten + Bevölkerung in einer Bounding-Box. */
 export function buildBboxQuery(bbox) {
@@ -104,9 +117,15 @@ export function classify(tags) {
     attraction: "freizeit", theme_park: "freizeit", zoo: "freizeit", cinema: "freizeit",
     viewpoint: "natur", water_park: "therme", swimming_pool: "therme",
     sports_centre: "sport", stadium: "sport", mall: "einkauf",
+    university: "bildung", college: "bildung",
     farm: "regional", marketplace: "regional", beekeeper: "regional",
   };
-  return { type: t, cat: catMap[t] || "freizeit", visitors: VISITOR_ESTIMATES[t] || 10000 };
+  return {
+    type: t,
+    cat: catMap[t] || "freizeit",
+    visitors: VISITOR_ESTIMATES[t] || 10000,
+    dwellMin: DWELL_ESTIMATES[t] || 60,
+  };
 }
 
 export function vendingLabel(vending) {
@@ -172,7 +191,7 @@ export function parseElements(elements) {
       cat: c.cat,
       lat, lng,
       visitors: c.visitors,
-      dwellMin: 60,
+      dwellMin: c.dwellMin,
       source: "osm",
       osmType: c.type,
       updated: today,
