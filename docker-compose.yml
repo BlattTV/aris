@@ -1,0 +1,37 @@
+# Standort-Analyse Deutschland
+# Start: docker compose up -d        (baut das Image lokal)
+# Oder fertiges Image nutzen: image: ghcr.io/blatttv/aris:latest
+services:
+  standort-analyse:
+    build: .
+    # image: ghcr.io/blatttv/aris:latest   # statt build: fertiges Image aus GHCR
+    container_name: standort-analyse
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - daten:/data
+    environment:
+      # Admin-Konto beim ersten Start (sonst Zufallspasswort im Log)
+      ADMIN_EMAIL: "admin@standort-analyse.local"
+      # ADMIN_PASSWORD: "bitte-aendern"
+
+      # Deutschland-Datenupdate alle X Stunden
+      UPDATE_INTERVAL_H: "24"
+
+      # Lizenzpflicht (0 = offene Demo)
+      REQUIRE_AUTH: "1"
+
+      # Code-Updates automatisch aus Git ziehen (alle 15 min) – damit
+      # landen gepushte Änderungen ohne Image-Rebuild im Container
+      AUTO_UPDATE: "1"
+      BRANCH: "main"
+
+      # Optional: White-Label & Stripe-Verkauf
+      # BRAND_NAME: "Meine Standort-Analyse"
+      # PUBLIC_URL: "https://standorte.example.de"
+      # STRIPE_SECRET_KEY: "sk_live_…"
+      # STRIPE_WEBHOOK_SECRET: "whsec_…"
+
+volumes:
+  daten:

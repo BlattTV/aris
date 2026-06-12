@@ -225,8 +225,20 @@ async function readJson(req, limit = 65536) {
   }
 }
 
+// Nur die Web-App ausliefern – niemals Serverdaten, Code-Interna oder Git
+const STATIC_DENY = ["/data/", "/server/", "/deploy/", "/android/", "/node_modules/"];
+
 async function serveStatic(req, res, pathname) {
   if (pathname === "/") pathname = "/index.html";
+  const lower = pathname.toLowerCase();
+  if (
+    STATIC_DENY.some((d) => lower.startsWith(d)) ||
+    pathname.split("/").some((seg) => seg.startsWith("."))
+  ) {
+    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Nicht gefunden");
+    return;
+  }
   const file = path.normalize(path.join(ROOT, pathname));
   if (!file.startsWith(ROOT)) {
     res.writeHead(403); res.end(); return;

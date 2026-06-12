@@ -64,6 +64,10 @@ export async function initAuth(dir, log) {
   users = await loadJson("users.json", []);
   licenses = await loadJson("licenses.json", []);
   sessions = await loadJson("sessions.json", {});
+  // Korrupte Dateien dürfen den Start nicht verhindern
+  if (!Array.isArray(users)) users = [];
+  if (!Array.isArray(licenses)) licenses = [];
+  if (typeof sessions !== "object" || !sessions) sessions = {};
 
   // abgelaufene Sessions entsorgen
   const now = Date.now();

@@ -1,0 +1,29 @@
+name: Docker-Image bauen
+
+on:
+  workflow_dispatch:
+  push:
+    paths-ignore:
+      - "android/**"
+      - "README.md"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bei GHCR anmelden
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Image bauen und pushen
+        run: |
+          IMAGE="ghcr.io/$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')"
+          docker build -t "$IMAGE:latest" -t "$IMAGE:${{ github.sha }}" .
+          docker push "$IMAGE:latest"
+          docker push "$IMAGE:${{ github.sha }}"
+          echo "Image: $IMAGE:latest" >> "$GITHUB_STEP_SUMMARY"

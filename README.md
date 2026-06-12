@@ -91,6 +91,35 @@ python3 -m http.server 8080
 Die App erkennt automatisch, dass kein Server-API verfügbar ist, und lädt die
 Daten je Kartenausschnitt direkt von der Overpass-API („Direkt-Modus").
 
+## 🐳 Docker – Installation mit einem Befehl
+
+Fertiges Image aus der GitHub Container Registry (wird bei jedem Push
+automatisch gebaut):
+
+```bash
+docker run -d --name standort-analyse --restart unless-stopped \
+  -p 8080:8080 -v standort-analyse-daten:/data \
+  -e ADMIN_EMAIL=du@mail.de -e ADMIN_PASSWORD=bitte-aendern \
+  -e AUTO_UPDATE=1 \
+  ghcr.io/blatttv/aris:latest
+```
+
+Danach läuft alles unter `http://<host>:8080` (Admin: `/admin.html`).
+`AUTO_UPDATE=1` zieht alle 15 min Code-Updates aus dem Git-Repository und
+startet bei Änderungen neu – gepushte Änderungen landen also ohne
+Image-Rebuild im Container (Branch über `-e BRANCH=…`).
+
+> Hinweis: Ist das GHCR-Paket privat, vorher `docker login ghcr.io` oder das
+> Paket in den GitHub-Package-Einstellungen auf „public" stellen.
+> Alternativ ohne Registry: `git clone … && cd aris && docker compose up -d`
+> (baut lokal; alle Optionen in `docker-compose.yml`).
+
+Alle Umgebungsvariablen (`STRIPE_*`, `BRAND_NAME`, `UPDATE_INTERVAL_H`,
+`REQUIRE_AUTH`, …) funktionieren wie beim direkten Start; Nutzdaten liegen
+im Volume `/data` (mitsichern!). Das Zensus-Raster importierst du mit
+`docker exec standort-analyse node server/import-zensus.mjs /data/zensus.csv /data`
+(CSV vorher per `docker cp` ins Volume legen), danach Container neu starten.
+
 ## 📦 Hosting im LXC-Container (Proxmox & Co.)
 
 Frischen Debian-/Ubuntu-Container erstellen, dann als root:
