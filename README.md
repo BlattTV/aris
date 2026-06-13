@@ -239,25 +239,46 @@ live von der Overpass-API geladen.
 Dubletten-Schutz: kuratierte Attraktionen bei Namensgleichheit, OSM-Automaten
 in < 50 m Nähe zu manuell erfassten.
 
-## 📱 Android-App (APK)
+## 📱 Android-App (eigenständige APK)
 
-Im Ordner `android/` liegt eine native Android-App (WebView-Wrapper, keine
-externen Abhängigkeiten). Beim ersten Start fragt sie die Adresse deines
-Servers ab (z. B. `http://192.168.1.50:8080` für den LXC-Container im LAN)
-und merkt sie sich; Portfolio-Daten bleiben in der App gespeichert.
+Im Ordner `android/` liegt eine **eigenständige** native App: Die komplette
+Web-App wird beim Build ins APK gebündelt (`assets/web/`), sodass sie **offline
+und ohne jede Server-Eingabe sofort startet** – Karte, Analyse und Portfolio
+funktionieren direkt, Daten kommen live von OpenStreetMap/Overpass, das
+Portfolio liegt lokal auf dem Gerät.
+
+Optional: Über einen **langen Druck** auf den Bildschirm lässt sich ein eigener
+Server verbinden (für Konto-Login, Lizenz und Geräte-Sync); danach lädt die App
+dessen Oberfläche statt der gebündelten.
 
 **APK bauen lassen (ohne lokales Android-Studio):** Der GitHub-Actions-Workflow
 [`android-apk.yml`](.github/workflows/android-apk.yml) baut bei jedem Push auf
-`android/**` – oder manuell über *Actions → „Android APK bauen" → Run workflow* –
-eine installierbare Debug-APK und legt sie als Artefakt `standort-analyse-apk`
-zum Download ab. Auf dem Handy: APK herunterladen, Installation aus unbekannten
-Quellen erlauben, installieren.
+`android/**` **oder die Web-App** (`js/`, `css/`, `index.html` …) – oder manuell
+über *Actions → „Android App bauen" → Run workflow* – eine installierbare
+Debug-APK (Artefakt `standort-analyse-apk-debug`). Auf dem Handy: APK
+herunterladen, Installation aus unbekannten Quellen erlauben, installieren.
+
+**Play-Store-Veröffentlichung (signiertes AAB):** Hinterlege diese
+Repository-Secrets, dann baut derselbe Workflow zusätzlich eine signierte
+`app-release.apk` **und ein `app-release.aab`** (Artefakt
+`standort-analyse-release`) für den Play-Store-Upload:
+
+| Secret | Inhalt |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | `base64 -w0 release.jks` deines Upload-Keystores |
+| `ANDROID_KEYSTORE_PASSWORD` | Keystore-Passwort |
+| `ANDROID_KEY_ALIAS` | Alias des Signaturschlüssels |
+| `ANDROID_KEY_PASSWORD` | Schlüssel-Passwort |
+
+Keystore einmalig erzeugen:
+`keytool -genkeypair -v -keystore release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload`.
+Das `.aab` dann in der Google Play Console hochladen (Produktion oder interner Test).
 
 **Lokal bauen:** `cd android && gradle assembleDebug` (Android SDK + Java 17 nötig).
 
 Alternativ ist die Web-App weiterhin eine vollwertige **PWA**: unter HTTPS
-gehostet lässt sie sich in Chrome über „App installieren" ohne APK installieren.
-Für den Play Store: Bubblewrap/TWA (benötigt HTTPS-Domain).
+gehostet lässt sie sich in Chrome über „App installieren" (Button im ⚙️-Tab)
+ohne APK installieren.
 
 ## 🗂️ Projektstruktur
 

@@ -2,6 +2,20 @@ plugins {
     id 'com.android.application'
 }
 
+// Web-App (index.html, js/, css/, icons/ …) ins APK bündeln, damit die App
+// offline und ohne Server-Eingabe startet. Wird vor jedem Build frisch kopiert.
+def webAssets = "$projectDir/src/main/assets/web"
+tasks.register('copyWebApp', Copy) {
+    def repoRoot = "$rootDir/.."
+    from(repoRoot) {
+        include 'index.html', 'admin.html', 'manifest.webmanifest', 'sw.js'
+        include 'css/**', 'js/**', 'icons/**'
+    }
+    into webAssets
+}
+preBuild.dependsOn copyWebApp
+clean.doFirst { delete webAssets }
+
 android {
     namespace 'de.standortanalyse.app'
     compileSdk 34
@@ -10,13 +24,30 @@ android {
         applicationId 'de.standortanalyse.app'
         minSdk 24
         targetSdk 34
-        versionCode 1
-        versionName '2.0'
+        versionCode 2
+        versionName '3.0'
+    }
+
+    signingConfigs {
+        release {
+            // Signatur über Umgebungsvariablen (CI) – sonst Debug-Fallback.
+            def ksPath = System.getenv('ANDROID_KEYSTORE_PATH')
+            if (ksPath) {
+                storeFile file(ksPath)
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+            }
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
+            // Signierte Release nur, wenn ein Keystore gesetzt ist
+            if (System.getenv('ANDROID_KEYSTORE_PATH')) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 

@@ -27,6 +27,13 @@ export function getServerStatus() {
 }
 
 export async function detectMode() {
+  // Gebündelte Offline-APK (file://) hat keinen relativen Server – direkt
+  // gegen Overpass arbeiten, ohne unnötigen Status-Abruf.
+  if (location.protocol === "file:") {
+    mode = "direct";
+    notify("mode");
+    return mode;
+  }
   try {
     const res = await fetch("api/status", { cache: "no-store" });
     if (res.ok) {

@@ -227,6 +227,9 @@ export function addMachine(machine) {
     lng: machine.lng,
     isCompetitor: !!machine.isCompetitor,
     monthlySalesEur: machine.monthlySalesEur || null,
+    salesHistory: machine.salesHistory || [],
+    costPurchaseEur: Number(machine.costPurchaseEur) || 0,
+    costMonthlyEur: Number(machine.costMonthlyEur) || 0,
     note: machine.note || "",
     installedAt: machine.installedAt || new Date().toISOString().slice(0, 10),
   };

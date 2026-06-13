@@ -92,6 +92,8 @@
         <h4>📈 Umsatz-Forecast (aus Ist-Daten)</h4>
         <div class="sub" id="forecast-info"></div>
         <canvas id="chart-forecast" class="chart"></canvas>
+        <h4>💰 Finanzen je <span data-term="unit">Automat</span> (Ist-Daten)</h4>
+        <div id="dash-finance"></div>
         <h4>Standort-Ranking (eigene <span data-term="units">Automaten</span>)</h4>
         <ul class="list" id="dash-ranking"></ul>
         <div class="btn-row">
@@ -103,6 +105,7 @@
       <!-- Einstellungen -->
       <section class="panel" id="panel-einstellungen">
         <div id="account-section"></div>
+        <div id="android-section"></div>
         <div id="team-section"></div>
         <h3>Branchenprofil (White-Label)</h3>
         <div class="form-grid">
@@ -145,6 +148,35 @@
     </aside>
 
     <main id="map"></main>
+  </div>
+
+  <!-- Automat anlegen / bearbeiten (inkl. Finanzdaten) -->
+  <div id="machine-modal" class="modal">
+    <div class="modal-card">
+      <h3 id="mm-title">🥤 <span data-term="unit">Automat</span></h3>
+      <form id="machine-form">
+        <label>Name<input type="text" id="mm-name" required maxlength="60"></label>
+        <div class="grid2">
+          <label>Typ
+            <select id="mm-type">
+              <option>Kombi</option><option>Snack</option><option>Getränke</option>
+              <option>Pizza</option><option>Eis</option><option>Kaffee</option>
+              <option>Regional/Hofladen</option><option>Sonstiges</option>
+            </select>
+          </label>
+          <label class="check" style="align-self:end"><input type="checkbox" id="mm-competitor"> Fremder (Wettbewerber)</label>
+        </div>
+        <div class="grid2" id="mm-finance">
+          <label>Anschaffung (€)<input type="number" id="mm-purchase" min="0" step="50" placeholder="z. B. 3500"></label>
+          <label>Laufende Kosten (€/Monat)<input type="number" id="mm-monthly" min="0" step="10" placeholder="Standplatz, Strom …"></label>
+        </div>
+        <label>Notiz<input type="text" id="mm-note" maxlength="120"></label>
+        <div class="btn-row">
+          <button class="btn" type="submit">💾 Speichern</button>
+          <button class="btn ghost" type="button" id="mm-cancel">Abbrechen</button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <!-- Anmeldung (nur Server-Modus mit Lizenzpflicht) -->

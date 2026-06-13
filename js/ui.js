@@ -12,7 +12,7 @@ import {
 import { analyzePoint, computeCalibration, haversineKm, fmtNum, fmtEur } from "./analysis.js";
 import { setClickMode, renderHeatmap, renderSuggestions, renderRoute, map } from "./map.js";
 import { planRoute } from "./route.js";
-import { portfolioForecast } from "./forecast.js";
+import { portfolioForecast, machineAnnualActual } from "./forecast.js";
 import { VERTICALS, applyVertical, updateVerticalLabels, unit } from "./verticals.js";
 import { shareWith, unshareWith, mySharedWith, loadTeamMachines, syncActive } from "./sync.js";
 import { refreshNow, scheduleAutoRefresh, getMode, getServerStatus, geocode, loadViewport } from "./api.js";
@@ -20,6 +20,15 @@ import { getUserInfo, logout, redeemLicense, changePassword, showAuthOverlay } f
 import { barChart, donut } from "./charts.js";
 
 const $ = (sel) => document.querySelector(sel);
+
+// PWA-Installation: Browser-Event abfangen, um „Als App installieren" anzubieten
+let deferredInstallPrompt = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  const btn = $("#btn-install-pwa");
+  if (btn) btn.style.display = "";
+});
 
 export function initUi() {
   initTabs();
@@ -29,6 +38,7 @@ export function initUi() {
   renderDashboard();
   renderSettingsPanel();
   bindGlobalActions();
+  bindMachineModal();
 
   subscribe((topic) => {
     if (topic === "selection" || topic === "settings" || topic === "machines")
@@ -130,8 +140,7 @@ function renderAnalysisPanel() {
   `;
 
   $("#btn-place-here").addEventListener("click", () => {
-    const name = prompt("Name des Automaten:", "Mein Automat " + (state.machines.length + 1));
-    if (name) addMachine({ name, lat: r.point.lat, lng: r.point.lng, isCompetitor: false });
+    openMachineModal({ latlng: { lat: r.point.lat, lng: r.point.lng } });
   });
   $("#btn-copy-report").addEventListener("click", () => {
     navigator.clipboard.writeText(textReport(r)).then(
@@ -151,6 +160,42 @@ function textReport(r) {
     `Besucherpotenzial: ${fmtNum(r.visitorPotentialYear)} | Einwohner: ${fmtNum(r.residentsInRange)}`,
     `Wettbewerber im Radius: ${r.competitors.length} (Marktanteil ${(r.marketShare * 100).toFixed(0)} %)`,
   ].join("\n");
+}
+
+// ---------- Automaten-Formular (Anlegen/Bearbeiten inkl. Finanzen) ----------
+
+let machineModalCtx = null; // { latlng } für neu, { id } für Bearbeiten
+
+export function openMachineModal(ctx) {
+  machineModalCtx = ctx;
+  const m = ctx.id ? state.machines.find((x) => x.id === ctx.id) : null;
+  $("#mm-name").value = m?.name || "Mein " + unit() + " " + (state.machines.filter((x) => !x.isCompetitor).length + 1);
+  $("#mm-type").value = m?.type && [...$("#mm-type").options].some((o) => o.value === m.type) ? m.type : "Kombi";
+  $("#mm-competitor").checked = m?.isCompetitor || false;
+  $("#mm-purchase").value = m?.costPurchaseEur || "";
+  $("#mm-monthly").value = m?.costMonthlyEur || "";
+  $("#mm-note").value = m?.note || "";
+  $("#machine-modal").classList.add("visible");
+  $("#mm-name").focus();
+}
+
+function bindMachineModal() {
+  $("#mm-cancel").addEventListener("click", () => $("#machine-modal").classList.remove("visible"));
+  $("#machine-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const fields = {
+      name: $("#mm-name").value.trim(),
+      type: $("#mm-type").value,
+      isCompetitor: $("#mm-competitor").checked,
+      costPurchaseEur: Number($("#mm-purchase").value) || 0,
+      costMonthlyEur: Number($("#mm-monthly").value) || 0,
+      note: $("#mm-note").value.trim(),
+    };
+    if (!fields.name) return;
+    if (machineModalCtx?.id) updateMachine(machineModalCtx.id, fields);
+    else addMachine({ ...fields, lat: machineModalCtx.latlng.lat, lng: machineModalCtx.latlng.lng });
+    $("#machine-modal").classList.remove("visible");
+  });
 }
 
 // ---------- Panel: Attraktionen ----------
@@ -240,6 +285,8 @@ function renderMachinesPanel() {
   $("#machines-list").innerHTML = sorted.map((m) => {
     const fromOsm = m.source === "osm";
     const r = analyzePoint(m.lat, m.lng, undefined, { excludeMachineId: m.id });
+    const costLine = !fromOsm && (m.costMonthlyEur || m.costPurchaseEur)
+      ? `<small>Kosten: ${fmtNum(m.costMonthlyEur || 0)} €/Monat${m.costPurchaseEur ? ` · Anschaffung ${fmtNum(m.costPurchaseEur)} €` : ""}</small>` : "";
     return `<li class="card" data-goto="${m.lat},${m.lng}">
       <div class="card-head">
         <strong>${fromOsm ? "🧺" : "🥤"} ${m.name}</strong>
@@ -249,7 +296,9 @@ function renderMachinesPanel() {
       </div>
       <small>${m.type}${fromOsm ? (m.operator ? " · " + m.operator : "") : " · seit " + m.installedAt} · Score ${r.score}/100${fromOsm ? "" : " · Prognose " + fmtEur(r.revenueYear) + "/Jahr"}</small>
       ${m.monthlySalesEur ? `<small>Ist-Umsatz: ${fmtNum(m.monthlySalesEur)} €/Monat ${istVsPlan(m, r)}${m.salesHistory?.length ? ` · ${m.salesHistory.length} Monate Historie` : ""}</small>` : ""}
+      ${costLine}
       ${fromOsm ? "" : `<div class="btn-row">
+        <button class="btn tiny ghost" data-editmachine="${m.id}">✏️ Bearbeiten</button>
         <button class="btn tiny ghost" data-edit-machine="${m.id}">📈 Umsätze erfassen</button>
       </div>`}
     </li>`;
@@ -263,6 +312,12 @@ function renderMachinesPanel() {
         ? "Diesen OSM-Automaten aus der Berechnung ausblenden?"
         : "Automat löschen?";
       if (confirm(msg)) removeMachine(id);
+    })
+  );
+  $("#machines-list").querySelectorAll("[data-editmachine]").forEach((b) =>
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openMachineModal({ id: b.dataset.editmachine });
     })
   );
   $("#machines-list").querySelectorAll("[data-edit-machine]").forEach((b) =>
@@ -382,6 +437,8 @@ function renderDashboard() {
     if (c3.clientWidth) c3.getContext("2d").clearRect(0, 0, c3.width, c3.height);
   }
 
+  renderFinanceTable(own);
+
   // Ranking eigener Standorte
   const ranked = own
     .map((m) => ({ m, r: analyzePoint(m.lat, m.lng, undefined, { excludeMachineId: m.id }) }))
@@ -394,7 +451,82 @@ function renderDashboard() {
     </li>`).join("") || `<li class="hint">Platziere Automaten, um dein Portfolio zu bewerten.</li>`;
 }
 
+/**
+ * Finanzübersicht je Automat aus den hinterlegten Ist-Daten:
+ * Umsatz (aus Historie oder Modellprognose als Fallback), Marge,
+ * laufende Kosten und Amortisation der Anschaffung.
+ */
+function renderFinanceTable(own) {
+  const el = $("#dash-finance");
+  if (!el) return;
+  const s = state.settings;
+  const withData = own.filter((m) => m.monthlySalesEur || m.salesHistory?.length || m.costMonthlyEur || m.costPurchaseEur);
+
+  if (!own.length) {
+    el.innerHTML = `<div class="hint">Lege eigene ${unit()}en an (mit Anschaffung & laufenden Kosten), um die Finanzübersicht zu sehen.</div>`;
+    return;
+  }
+
+  let sumRev = 0, sumProfit = 0, sumInvest = 0;
+  const rows = own.map((m) => {
+    const r = analyzePoint(m.lat, m.lng, undefined, { excludeMachineId: m.id });
+    // Ist-Umsatz bevorzugen, sonst Modellprognose
+    const annualRev = machineAnnualActual(m) || r.revenueYear;
+    const isActual = machineAnnualActual(m) > 0;
+    const grossProfit = annualRev * (s.marginPct / 100);
+    const opex = (m.costMonthlyEur || s.opexPerMachineMonth) * 12;
+    const net = grossProfit - opex;
+    const payoffMonths = m.costPurchaseEur && net > 0 ? (m.costPurchaseEur / (net / 12)) : null;
+    sumRev += annualRev; sumProfit += net; sumInvest += m.costPurchaseEur || 0;
+    return `<tr>
+      <td>${m.name}${isActual ? "" : ' <span class="badge">Plan</span>'}</td>
+      <td>${fmtEur(annualRev)}</td>
+      <td>${fmtEur(opex)}</td>
+      <td class="${net >= 0 ? "pos" : "neg"}">${fmtEur(net)}</td>
+      <td>${payoffMonths ? fmtNum(payoffMonths, 0) + " Mon." : "–"}</td>
+    </tr>`;
+  }).join("");
+
+  const roi = sumInvest > 0 ? (sumProfit / sumInvest) * 100 : null;
+  el.innerHTML = `
+    <table class="fin-table">
+      <tr><th>${unit()}</th><th>Umsatz/J</th><th>Kosten/J</th><th>Gewinn/J</th><th>Amort.</th></tr>
+      ${rows}
+      <tr style="font-weight:700">
+        <td>Σ ${own.length}</td><td>${fmtEur(sumRev)}</td><td></td>
+        <td class="${sumProfit >= 0 ? "pos" : "neg"}">${fmtEur(sumProfit)}</td>
+        <td>${roi !== null ? fmtNum(roi, 0) + " % ROI" : "–"}</td>
+      </tr>
+    </table>
+    <div class="sub">„Plan" = Modellprognose (noch keine Ist-Umsätze erfasst). Investition gesamt: ${fmtEur(sumInvest)}.</div>`;
+}
+
 // ---------- Panel: Einstellungen ----------
+
+function renderAndroidSection() {
+  const el = $("#android-section");
+  if (!el) return;
+  // In der gebündelten App (file://) ist der Hinweis irrelevant
+  if (location.protocol === "file:") { el.innerHTML = ""; return; }
+  el.innerHTML = `
+    <div class="account-card">
+      <div class="who">📱 Android-App</div>
+      <div class="lic">Diese Web-App ist auch als eigenständige Android-App verfügbar (offline nutzbar, im Konto synchronisiert wenn mit Server verbunden).</div>
+      <div class="btn-row">
+        <a class="btn tiny" href="https://github.com/BlattTV/aris/actions/workflows/android-apk.yml" target="_blank" rel="noopener">⬇️ APK herunterladen</a>
+        <button class="btn tiny ghost" id="btn-install-pwa" style="display:none">📲 Als App installieren</button>
+      </div>
+    </div>`;
+  const btn = $("#btn-install-pwa");
+  if (deferredInstallPrompt && btn) {
+    btn.style.display = "";
+    btn.onclick = async () => {
+      deferredInstallPrompt.prompt();
+      deferredInstallPrompt = null;
+      btn.style.display = "none";
+    };
+  }
+}
 
 function renderAccountSection() {
   const el = $("#account-section");
@@ -544,6 +676,7 @@ function renderSettingsPanel() {
   $("#set-calibrate").checked = s.autoCalibrate !== false;
   updateVerticalLabels();
   renderTeamSection();
+  renderAndroidSection();
 
   const srv = getServerStatus();
   const modeLine =
@@ -564,14 +697,8 @@ function bindGlobalActions() {
   });
 
   $("#btn-add-machine").addEventListener("click", () => {
-    setClickMode("addMachine", (latlng) => {
-      const name = prompt("Name des Automaten:", "Automat " + (state.machines.length + 1));
-      if (!name) return;
-      const isCompetitor = confirm("Ist das ein FREMDER Automat (Wettbewerber)?\nOK = Wettbewerber, Abbrechen = eigener Automat");
-      const type = prompt("Typ (Snack / Getränke / Kombi / Pizza / Eis):", "Kombi") || "Kombi";
-      addMachine({ name, type, lat: latlng.lat, lng: latlng.lng, isCompetitor });
-    });
-    alert("Klicke nun auf die Karte, um die Position des Automaten festzulegen.");
+    setClickMode("addMachine", (latlng) => openMachineModal({ latlng }));
+    setDataStatus(`📍 Position des ${unit()}s auf der Karte anklicken …`);
   });
 
   $("#btn-add-attraction").addEventListener("click", () => {
