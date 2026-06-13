@@ -6,15 +6,15 @@
  */
 
 export const CATEGORIES = {
-  kultur:  { label: "Kultur & Museum", color: "#a78bfa", icon: "🏛️" },
-  freizeit:{ label: "Freizeit & Familie", color: "#34d399", icon: "🎡" },
-  therme:  { label: "Therme & Bad", color: "#38bdf8", icon: "💧" },
-  natur:   { label: "Natur & Wandern", color: "#84cc16", icon: "🌲" },
-  event:   { label: "Event & Festival", color: "#f472b6", icon: "🎪" },
-  sport:   { label: "Sport & Arena", color: "#fb923c", icon: "⚽" },
-  einkauf: { label: "Einkauf & Zentrum", color: "#facc15", icon: "🛍️" },
-  regional:{ label: "Hofladen & Markt", color: "#a3e635", icon: "🧑‍🌾" },
-  bildung: { label: "Bildung & Campus", color: "#f87171", icon: "🎓" },
+  kultur:  { label: "Kultur & Museum", color: "#6d6a93" },
+  freizeit:{ label: "Freizeit & Familie", color: "#4c8a78" },
+  therme:  { label: "Therme & Bad", color: "#5587a6" },
+  natur:   { label: "Natur & Wandern", color: "#6f8b54" },
+  event:   { label: "Event & Festival", color: "#a06f8c" },
+  sport:   { label: "Sport & Arena", color: "#b07c4f" },
+  einkauf: { label: "Einkauf & Zentrum", color: "#a99550" },
+  regional:{ label: "Hofladen & Markt", color: "#7c9255" },
+  bildung: { label: "Bildung & Campus", color: "#a05d5d" },
 };
 
 // Saisonfaktoren je Monat (Index 0 = Januar). Kalibriert auf fränkische

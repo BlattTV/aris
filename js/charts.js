@@ -2,7 +2,7 @@
  * Leichtgewichtige Canvas-Charts (ohne externe Abhängigkeit, offline-fähig).
  */
 
-export function barChart(canvas, labels, values, { color = "#22d3ee", colors = null, format = (v) => v } = {}) {
+export function barChart(canvas, labels, values, { color = "#2f5d8a", colors = null, format = (v) => v } = {}) {
   const ctx = canvas.getContext("2d");
   const dpr = window.devicePixelRatio || 1;
   const W = canvas.clientWidth, H = canvas.clientHeight;
@@ -28,10 +28,10 @@ export function barChart(canvas, labels, values, { color = "#22d3ee", colors = n
     ctx.roundRect(x, y, cw * 0.7, h, 3);
     ctx.fill();
     ctx.globalAlpha = 1;
-    ctx.fillStyle = "#94a3b8";
+    ctx.fillStyle = "#9aa1ab";
     ctx.fillText(labels[i], pad.l + i * cw + cw / 2, H - 8);
     if (v === max || i === values.length - 1) {
-      ctx.fillStyle = "#e2e8f0";
+      ctx.fillStyle = "#1f2329";
       ctx.fillText(format(v), pad.l + i * cw + cw / 2, y - 4);
     }
   });
@@ -69,7 +69,7 @@ export function donut(canvas, segments) {
   for (const seg of segments.slice(0, 7)) {
     ctx.fillStyle = seg.color;
     ctx.fillRect(H + 8, ly - 8, 9, 9);
-    ctx.fillStyle = "#cbd5e1";
+    ctx.fillStyle = "#6a7280";
     const pct = Math.round((seg.value / total) * 100);
     ctx.fillText(`${seg.label} (${pct}%)`, H + 22, ly);
     ly += 16;

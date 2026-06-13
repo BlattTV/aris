@@ -3,7 +3,7 @@
  * installierbar (PWA). App-Shell wird gecacht, Kartenkacheln und
  * Overpass-Daten laufen network-first mit Cache-Fallback.
  */
-const CACHE = "standort-analyse-v5";
+const CACHE = "standort-analyse-v6";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -49,6 +49,7 @@ self.addEventListener("fetch", (e) => {
   // Kartenkacheln & APIs: network-first, dann Cache
   const networkFirst =
     url.hostname.includes("tile.openstreetmap.org") ||
+    url.hostname.includes("basemaps.cartocdn.com") ||
     url.hostname.includes("overpass-api.de") ||
     url.hostname.includes("nominatim.openstreetmap.org") ||
     url.pathname.includes("/api/");

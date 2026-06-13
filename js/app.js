@@ -47,7 +47,7 @@ if (params.get("payment") === "success") {
   history.replaceState(null, "", location.pathname);
   setTimeout(async () => {
     await fetchMe(); // Lizenzstatus aktualisieren (Webhook hat verlängert)
-    alert("💳 Zahlung erfolgreich – deine Lizenz wurde verlängert. Danke!");
+    alert("Zahlung erfolgreich – deine Lizenz wurde verlängert. Danke!");
   }, 800);
 } else if (params.get("payment") === "cancel") {
   history.replaceState(null, "", location.pathname);

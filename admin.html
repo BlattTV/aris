@@ -3,30 +3,33 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#2f5d8a">
   <meta name="robots" content="noindex">
-  <title>Admin · Standort-Analyse Deutschland</title>
+  <title>Administration · Standort-Analyse</title>
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;650;700&display=swap">
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/admin.css">
 </head>
 <body class="admin-body">
   <header class="topbar">
     <div class="brand">
-      <span class="logo">🛠️</span>
+      <span class="logo">SA</span>
       <div>
-        <h1>Admin-Oberfläche</h1>
-        <small>Konten, Lizenzen & Betrieb</small>
+        <h1>Administration</h1>
+        <small>Konten, Lizenzen &amp; Betrieb</small>
       </div>
     </div>
     <div class="topbar-actions">
-      <a class="btn ghost" href="index.html">🗺️ Zur Karte</a>
-      <button class="btn ghost" id="btn-admin-logout">🚪 Abmelden</button>
+      <a class="btn ghost" href="index.html">Zur Karte</a>
+      <button class="btn ghost" id="btn-admin-logout">Abmelden</button>
     </div>
   </header>
 
   <main class="admin-main" id="admin-main">
-    <div class="hint" id="admin-guard">⏳ Prüfe Berechtigung…</div>
+    <div class="hint" id="admin-guard">Prüfe Berechtigung …</div>
 
     <div id="admin-content" style="display:none">
       <section>
@@ -35,7 +38,7 @@
       </section>
 
       <section>
-        <h3>🎟️ Lizenzschlüssel erzeugen (zum Verkauf)</h3>
+        <h3>Lizenzschlüssel erzeugen</h3>
         <form class="gen-form" id="license-form">
           <label>Plan
             <select id="lic-plan">
@@ -55,7 +58,7 @@
       </section>
 
       <section>
-        <h3>👥 Nutzerkonten</h3>
+        <h3>Nutzerkonten</h3>
         <form class="gen-form" id="user-form">
           <label>E-Mail<input type="email" id="new-email" required></label>
           <label>Name<input type="text" id="new-name"></label>
@@ -67,9 +70,9 @@
       </section>
 
       <section>
-        <h3>⚙️ Betrieb</h3>
+        <h3>Betrieb</h3>
         <div class="sub" id="ops-status"></div>
-        <button class="btn" id="btn-trigger-update">🔄 Deutschland-Datenupdate anstoßen</button>
+        <button class="btn" id="btn-trigger-update">Deutschland-Datenupdate anstoßen</button>
       </section>
     </div>
   </main>

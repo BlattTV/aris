@@ -27,7 +27,7 @@ async function guard() {
     return true;
   } catch (e) {
     $("#admin-guard").innerHTML =
-      `🔒 ${e.message}<br><br><a class="btn" href="index.html">Zur Anmeldung</a>`;
+      `${e.message}<br><br><a class="btn" href="index.html">Zur Anmeldung</a>`;
     return false;
   }
 }
@@ -61,8 +61,8 @@ function renderLicenses() {
         <td>${l.note || ""}</td>
         <td>${fmtDate(l.createdAt)}</td>
         <td>
-          <button class="btn tiny ghost" data-copy="${l.key}">📋</button>
-          <button class="btn tiny ghost" data-revoke="${l.key}">🗑️ widerrufen</button>
+          <button class="btn tiny ghost" data-copy="${l.key}">Kopieren</button>
+          <button class="btn tiny ghost" data-revoke="${l.key}">Widerrufen</button>
         </td>
       </tr>`).join("")}
     ${unused.length ? "" : `<tr><td colspan="6">Keine offenen Schlüssel – oben neue erzeugen.</td></tr>`}`;
@@ -83,8 +83,8 @@ function renderUsers() {
     ${overview.users.map((u) => {
       const lic = u.license || {};
       const licText = u.role === "admin" ? "∞ (Admin)"
-        : lic.valid ? `✅ ${lic.plan || ""} bis ${fmtDate(lic.validUntil)}`
-        : `❌ ${lic.reason || "keine"}`;
+        : lic.valid ? `${lic.plan || ""} bis ${fmtDate(lic.validUntil)}`
+        : `${lic.reason || "keine"}`;
       return `
       <tr>
         <td><strong>${u.name}</strong><br><small>${u.email}</small></td>
@@ -94,9 +94,9 @@ function renderUsers() {
         <td>
           <button class="btn tiny ghost" data-extend="${u.id}|30">+30 T</button>
           <button class="btn tiny ghost" data-extend="${u.id}|365">+1 Jahr</button>
-          <button class="btn tiny ghost" data-toggle="${u.id}|${u.active}">${u.active ? "⛔ sperren" : "✅ aktivieren"}</button>
-          <button class="btn tiny ghost" data-pw="${u.id}">🔑 Passwort</button>
-          <button class="btn tiny ghost" data-del="${u.id}|${u.email}">🗑️</button>
+          <button class="btn tiny ghost" data-toggle="${u.id}|${u.active}">${u.active ? "Sperren" : "Aktivieren"}</button>
+          <button class="btn tiny ghost" data-pw="${u.id}">Passwort</button>
+          <button class="btn tiny ghost" data-del="${u.id}|${u.email}">Löschen</button>
         </td>
       </tr>`;
     }).join("")}`;
@@ -139,7 +139,7 @@ async function renderOps() {
     $("#ops-status").textContent =
       `Deutschland-Datenbestand: ${st.updatedAt ? fmtDateTime(st.updatedAt) : "noch keiner"} · ` +
       `${st.machines} Automaten · ${st.regionalPois} Hofläden/Märkte · ${st.pois || 0} Attraktionen · ${st.population} Orte · ` +
-      `Update-Intervall ${st.updateIntervalHours} h${st.updateRunning ? " · ⏳ Update läuft gerade" : ""}`;
+      `Update-Intervall ${st.updateIntervalHours} h${st.updateRunning ? " · Update läuft gerade" : ""}`;
   } catch { /* Status optional */ }
 }
 

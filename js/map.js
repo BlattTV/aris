@@ -26,9 +26,12 @@ export function initMap() {
     .setView([50.2585, 10.9645], 12);
   L.control.zoom({ position: "bottomright" }).addTo(map);
 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  // Zurückhaltender, heller Basemap (CartoDB Positron) für ein
+  // professionelles Erscheinungsbild; die farbigen Marker treten hervor.
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
     maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    subdomains: "abcd",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
   }).addTo(map);
 
   attractionLayer = L.layerGroup().addTo(map);
@@ -154,11 +157,11 @@ export function renderAttractions() {
       fillOpacity: a.source === "osm" ? 0.25 : 0.55,
     }).addTo(attractionLayer);
     marker.bindPopup(`
-      <strong>${cat.icon} ${a.name}</strong><br>
-      ${cat.label}${a.source === "osm" ? " · <em>OSM (auto)</em>" : ""}<br>
+      <strong>${dot(cat.color)}${a.name}</strong><br>
+      ${cat.label}${a.source === "osm" ? " · OSM" : ""}<br>
       Besucher/Jahr: <strong>${fmtNum(a.visitors)}</strong><br>
       ${a.note ? a.note + "<br>" : ""}
-      <button class="popup-btn" data-analyze="${a.lat},${a.lng}">📍 Hier analysieren</button>
+      <button class="popup-btn" data-analyze="${a.lat},${a.lng}">Hier analysieren</button>
     `);
   }
 
@@ -167,15 +170,20 @@ export function renderAttractions() {
     const visitors = c.items.reduce((s, x) => s + x.visitors, 0);
     L.circleMarker([c.lat, c.lng], {
       radius: Math.min(26, markerRadius(visitors) + 4),
-      color: "#94a3b8",
+      color: "#9aa1ab",
       weight: 2,
       fillColor: (CATEGORIES[top.cat] || CATEGORIES.freizeit).color,
-      fillOpacity: 0.45,
+      fillOpacity: 0.4,
     })
-      .bindTooltip(`+${c.count} Attraktionen · ${fmtNum(visitors)} Besucher/Jahr · Top: ${top.name}`)
+      .bindTooltip(`${c.count} Attraktionen · ${fmtNum(visitors)} Besucher/Jahr · u. a. ${top.name}`)
       .on("click", () => zoomIntoCluster(c))
       .addTo(attractionLayer);
   }
+}
+
+// Kleiner farbiger Kategoriepunkt für Popups
+function dot(color) {
+  return `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${color};margin-right:6px;vertical-align:middle"></span>`;
 }
 
 export function renderMachines() {
@@ -184,20 +192,21 @@ export function renderMachines() {
 
   for (const m of singles) {
     const fromOsm = m.source === "osm";
+    const cls = m.isCompetitor ? (fromOsm ? "osm" : "competitor") : "own";
     const icon = L.divIcon({
       className: "machine-icon",
-      html: `<div class="machine-pin ${m.isCompetitor ? "competitor" : "own"}${fromOsm ? " osm" : ""}">${fromOsm ? "🧺" : "🥤"}</div>`,
-      iconSize: [30, 30],
-      iconAnchor: [15, 15],
+      html: `<div class="map-pin ${cls}"></div>`,
+      iconSize: [22, 22],
+      iconAnchor: [11, 21],
     });
     L.marker([m.lat, m.lng], { icon })
       .bindPopup(`
-        <strong>${fromOsm ? "🧺" : "🥤"} ${m.name}</strong><br>
+        <strong>${m.name}</strong><br>
         Typ: ${m.type} · ${m.isCompetitor ? "Wettbewerber" : "Eigener Automat"}<br>
-        ${fromOsm ? "Quelle: OpenStreetMap (farmshops-Daten, auto-aktualisiert)<br>" : ""}
+        ${fromOsm ? "Quelle: OpenStreetMap (farmshops-Daten)<br>" : ""}
         ${m.monthlySalesEur ? `Umsatz: ${fmtNum(m.monthlySalesEur)} €/Monat<br>` : ""}
         ${m.note ? m.note + "<br>" : ""}
-        <button class="popup-btn" data-analyze="${m.lat},${m.lng}">📍 Standort analysieren</button>
+        <button class="popup-btn" data-analyze="${m.lat},${m.lng}">Standort analysieren</button>
       `)
       .addTo(machineLayer);
   }
@@ -206,9 +215,9 @@ export function renderMachines() {
     const own = c.items.filter((x) => !x.isCompetitor).length;
     const icon = L.divIcon({
       className: "machine-icon",
-      html: `<div class="cluster-pin${own ? " has-own" : ""}">🥤<span>+${c.count}</span></div>`,
-      iconSize: [40, 26],
-      iconAnchor: [20, 13],
+      html: `<div class="cluster-pin${own ? " has-own" : ""}">${c.count}</div>`,
+      iconSize: [34, 26],
+      iconAnchor: [17, 13],
     });
     L.marker([c.lat, c.lng], { icon })
       .bindTooltip(`${c.count} Automaten${own ? ` (davon ${own} eigene)` : ""} – klicken zum Hineinzoomen`)
@@ -222,10 +231,10 @@ function renderPopulation() {
   for (const p of state.populationCenters) {
     L.circle([p.lat, p.lng], {
       radius: Math.sqrt(p.pop) * 18,
-      color: "#64748b",
+      color: "#6a7280",
       weight: 1,
-      fillColor: "#64748b",
-      fillOpacity: 0.12,
+      fillColor: "#6a7280",
+      fillOpacity: 0.1,
     })
       .bindTooltip(`${p.name}: ${fmtNum(p.pop)} Einwohner`)
       .addTo(popLayer);
@@ -239,16 +248,16 @@ export function renderEvents() {
     const active = today >= ev.from && today <= ev.to;
     const icon = L.divIcon({
       className: "event-icon",
-      html: `<div class="event-pin${active ? " active" : ""}">📅</div>`,
-      iconSize: [28, 28],
-      iconAnchor: [14, 14],
+      html: `<div class="map-pin event${active ? " active" : ""}"></div>`,
+      iconSize: [20, 20],
+      iconAnchor: [10, 10],
     });
     L.marker([ev.lat, ev.lng], { icon })
       .bindPopup(`
-        <strong>📅 ${ev.name}</strong><br>
+        <strong>${ev.name}</strong><br>
         ${ev.from} bis ${ev.to} ${active ? "· <strong>läuft gerade</strong>" : ""}<br>
         Erwartete Besucher: ${fmtNum(ev.visitors)}<br>
-        <button class="popup-btn" data-analyze="${ev.lat},${ev.lng}">📍 Hier analysieren</button>
+        <button class="popup-btn" data-analyze="${ev.lat},${ev.lng}">Hier analysieren</button>
       `)
       .addTo(eventLayer);
   }
@@ -259,15 +268,15 @@ export function renderTeam() {
   for (const m of state.teamMachines) {
     const icon = L.divIcon({
       className: "machine-icon",
-      html: `<div class="machine-pin team">👥</div>`,
-      iconSize: [30, 30],
-      iconAnchor: [15, 15],
+      html: `<div class="map-pin team"></div>`,
+      iconSize: [22, 22],
+      iconAnchor: [11, 21],
     });
     L.marker([m.lat, m.lng], { icon })
       .bindPopup(`
-        <strong>👥 ${m.name}</strong><br>
+        <strong>${m.name}</strong><br>
         Team-Standort von ${m.owner}<br>
-        <button class="popup-btn" data-analyze="${m.lat},${m.lng}">📍 Standort analysieren</button>
+        <button class="popup-btn" data-analyze="${m.lat},${m.lng}">Standort analysieren</button>
       `)
       .addTo(teamLayer);
   }
@@ -278,7 +287,7 @@ export function renderRoute(route) {
   routeLayer.clearLayers();
   if (!route) return;
   const latlngs = [...route.order.map((p) => [p.lat, p.lng]), [route.order[0].lat, route.order[0].lng]];
-  L.polyline(latlngs, { color: "#f59e0b", weight: 3, dashArray: "8 6" }).addTo(routeLayer);
+  L.polyline(latlngs, { color: "#2f5d8a", weight: 3, dashArray: "8 6" }).addTo(routeLayer);
   route.order.forEach((p, i) => {
     if (p.isStart) return;
     const icon = L.divIcon({
@@ -291,8 +300,8 @@ export function renderRoute(route) {
   });
   const start = route.order[0];
   L.marker([start.lat, start.lng], {
-    icon: L.divIcon({ className: "route-icon", html: `<div class="route-stop start">🏁</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
-  }).bindTooltip("Start/Depot").addTo(routeLayer);
+    icon: L.divIcon({ className: "route-icon", html: `<div class="route-stop start">S</div>`, iconSize: [24, 24], iconAnchor: [12, 12] }),
+  }).bindTooltip("Start / Depot").addTo(routeLayer);
 }
 
 export function renderAnalysis() {
@@ -303,18 +312,18 @@ export function renderAnalysis() {
 
   L.circle([lat, lng], {
     radius: r.radiusKm * 1000,
-    color: "#22d3ee",
+    color: "#2f5d8a",
     weight: 2,
     dashArray: "6 6",
-    fillColor: "#22d3ee",
-    fillOpacity: 0.07,
+    fillColor: "#2f5d8a",
+    fillOpacity: 0.06,
   }).addTo(analysisLayer);
 
   const icon = L.divIcon({
     className: "analysis-icon",
-    html: `<div class="analysis-pin">📍<span class="score-badge s${scoreClass(r.score)}">${r.score}</span></div>`,
-    iconSize: [34, 40],
-    iconAnchor: [17, 38],
+    html: `<div class="analysis-pin"><span class="pin-shape"></span><span class="score-badge s${scoreClass(r.score)}">${r.score}</span></div>`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 28],
   });
   L.marker([lat, lng], { icon }).addTo(analysisLayer);
 }
@@ -331,12 +340,12 @@ export function renderHeatmap() {
     west: b.getWest(), east: b.getEast(),
   }, Math.max(0.6, (b.getNorth() - b.getSouth()) * 111 / 24));
   for (const g of grid) {
-    const color = g.score >= 70 ? "#22c55e" : g.score >= 40 ? "#eab308" : "#ef4444";
+    const color = g.score >= 70 ? "#2f7d57" : g.score >= 40 ? "#9a6a1c" : "#b0423f";
     L.circle([g.lat, g.lng], {
       radius: 280,
       color, weight: 0,
       fillColor: color,
-      fillOpacity: 0.10 + (g.score / 100) * 0.35,
+      fillOpacity: 0.10 + (g.score / 100) * 0.32,
     })
       .bindTooltip(`Score ${g.score} · ~${fmtNum(g.customersDay, 1)} Kunden/Tag`)
       .addTo(heatLayer);
@@ -354,15 +363,15 @@ export function renderSuggestions() {
   spots.forEach((s, i) => {
     const icon = L.divIcon({
       className: "suggestion-icon",
-      html: `<div class="suggestion-pin">⭐<span>${i + 1}</span></div>`,
-      iconSize: [32, 32],
-      iconAnchor: [16, 16],
+      html: `<div class="suggestion-pin">${i + 1}</div>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
     });
     L.marker([s.lat, s.lng], { icon })
       .bindPopup(`
-        <strong>⭐ Standort-Vorschlag #${i + 1}</strong><br>
+        <strong>Standort-Vorschlag #${i + 1}</strong><br>
         Score: <strong>${s.score}/100</strong> · ~${fmtNum(s.customersDay, 1)} Kunden/Tag<br>
-        <button class="popup-btn" data-analyze="${s.lat},${s.lng}">📍 Detail-Analyse</button>
+        <button class="popup-btn" data-analyze="${s.lat},${s.lng}">Detail-Analyse</button>
       `)
       .addTo(suggestionLayer);
   });

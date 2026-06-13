@@ -49,17 +49,17 @@ export function initUi() {
     if (["machines", "import", "data:merged"].includes(topic)) renderMachinesPanel();
     if (["machines", "settings", "data:merged", "import", "selection"].includes(topic))
       renderDashboard();
-    if (topic === "data:loading") setDataStatus("⏳ lädt…");
+    if (topic === "data:loading") setDataStatus("lädt …");
     if (topic === "data:merged") {
       setDataStatus("");
       renderSettingsPanel();
     }
-    if (topic === "data:toolarge") setDataStatus("🔍 zum Laden hineinzoomen");
-    if (topic === "data:error") setDataStatus("⚠️ Datenabruf fehlgeschlagen");
+    if (topic === "data:toolarge") setDataStatus("Zum Laden hineinzoomen");
+    if (topic === "data:error") setDataStatus("Datenabruf fehlgeschlagen");
     if (topic === "mode") renderSettingsPanel();
     if (topic === "auth") renderSettingsPanel();
     if (topic === "auth:required") {
-      setDataStatus("🔒 Anmeldung erforderlich");
+      setDataStatus("Anmeldung erforderlich");
       showAuthOverlay();
     }
   });
@@ -96,7 +96,7 @@ function renderAnalysisPanel() {
   $("#radius-value").textContent = state.settings.radiusKm.toFixed(1) + " km";
 
   if (!state.selection) {
-    el.innerHTML = `<div class="hint">👆 Klicke auf die Karte, um einen Standort zu analysieren – oder nutze „Beste Standorte finden".</div>`;
+    el.innerHTML = `<div class="hint">Klicke auf die Karte, um einen Standort zu analysieren – oder nutze „Beste Standorte finden".</div>`;
     return;
   }
 
@@ -119,23 +119,23 @@ function renderAnalysisPanel() {
     <div class="sub">* nach Marge (${state.settings.marginPct} %) und Betriebskosten (${fmtEur(r.opexYear)}/Jahr)</div>
 
     ${r.competitors.length ? `
-      <h4>⚠️ ${r.competitors.length} Automat(en) im Radius – Marktanteil ${(r.marketShare * 100).toFixed(0)} %</h4>
+      <h4>${r.competitors.length} Automat(en) im Radius – Marktanteil ${(r.marketShare * 100).toFixed(0)} %</h4>
       <ul class="mini-list">
-        ${r.competitors.map((c) => `<li>🥤 ${c.name} <small>(${fmtNum(c.distanceKm * 1000)} m, ${c.isCompetitor ? "Wettbewerber" : "eigener"})</small></li>`).join("")}
-      </ul>` : `<div class="sub ok">✅ Keine konkurrierenden Automaten im Radius</div>`}
+        ${r.competitors.map((c) => `<li>${c.name} <small>(${fmtNum(c.distanceKm * 1000)} m, ${c.isCompetitor ? "Wettbewerber" : "eigener"})</small></li>`).join("")}
+      </ul>` : `<div class="sub ok">Keine konkurrierenden Automaten im Radius</div>`}
 
     <h4>Potenzialtreiber im Radius (${r.contributions.length})</h4>
     <ul class="mini-list">
       ${r.contributions.slice(0, 8).map((c) => {
         const cat = CATEGORIES[c.attraction.cat] || CATEGORIES.freizeit;
-        return `<li>${cat.icon} ${c.attraction.name}
-          <small>${fmtNum(c.distanceKm * 1000)} m · wirksam ${fmtNum(c.effectiveVisitors)} Bes./Jahr</small></li>`;
+        return `<li><span class="cat-dot" style="background:${cat.color}"></span><div>${c.attraction.name}
+          <small>${fmtNum(c.distanceKm * 1000)} m · wirksam ${fmtNum(c.effectiveVisitors)} Bes./Jahr</small></div></li>`;
       }).join("")}
       ${r.contributions.length === 0 ? "<li><small>Keine Attraktion im Radius – Potenzial nur aus Wohnbevölkerung.</small></li>" : ""}
     </ul>
     <div class="btn-row">
-      <button class="btn" id="btn-place-here">🥤 Automat hier platzieren</button>
-      <button class="btn ghost" id="btn-copy-report">📋 Bericht kopieren</button>
+      <button class="btn" id="btn-place-here">Automat hier platzieren</button>
+      <button class="btn ghost" id="btn-copy-report">Bericht kopieren</button>
     </div>
   `;
 
@@ -212,7 +212,7 @@ function renderAttractionsPanel() {
       const past = today > ev.to;
       return `<li class="card" data-goto="${ev.lat},${ev.lng}">
         <div class="card-head">
-          <strong>📅 ${ev.name}</strong>
+          <strong>${ev.name}</strong>
           ${active ? '<span class="badge ok">läuft</span>' : past ? '<span class="badge">vorbei</span>' : '<span class="badge warn">geplant</span>'}
           <button class="del" data-del-event="${ev.id}" title="Löschen">✕</button>
         </div>
@@ -238,7 +238,7 @@ function renderAttractionsPanel() {
     return `<li class="card" data-goto="${a.lat},${a.lng}">
       <div class="card-head">
         <span class="cat-dot" style="background:${cat.color}"></span>
-        <strong>${cat.icon} ${a.name}</strong>
+        <strong>${a.name}</strong>
         ${a.source === "manuell" ? `<button class="del" data-del-attr="${a.id}" title="Löschen">✕</button>` : ""}
       </div>
       <small>${cat.label} · ${fmtNum(a.visitors)} Besucher/Jahr · Quelle: ${a.source}</small>
@@ -289,7 +289,7 @@ function renderMachinesPanel() {
       ? `<small>Kosten: ${fmtNum(m.costMonthlyEur || 0)} €/Monat${m.costPurchaseEur ? ` · Anschaffung ${fmtNum(m.costPurchaseEur)} €` : ""}</small>` : "";
     return `<li class="card" data-goto="${m.lat},${m.lng}">
       <div class="card-head">
-        <strong>${fromOsm ? "🧺" : "🥤"} ${m.name}</strong>
+        <strong>${m.name}</strong>
         ${fromOsm ? `<span class="badge">OSM</span>` : ""}
         <span class="badge ${m.isCompetitor ? "warn" : "ok"}">${m.isCompetitor ? "Wettbewerb" : "Eigen"}</span>
         <button class="del" data-del-machine="${m.id}" title="${fromOsm ? "Aus Berechnung ausblenden" : "Löschen"}">✕</button>
@@ -298,11 +298,11 @@ function renderMachinesPanel() {
       ${m.monthlySalesEur ? `<small>Ist-Umsatz: ${fmtNum(m.monthlySalesEur)} €/Monat ${istVsPlan(m, r)}${m.salesHistory?.length ? ` · ${m.salesHistory.length} Monate Historie` : ""}</small>` : ""}
       ${costLine}
       ${fromOsm ? "" : `<div class="btn-row">
-        <button class="btn tiny ghost" data-editmachine="${m.id}">✏️ Bearbeiten</button>
-        <button class="btn tiny ghost" data-edit-machine="${m.id}">📈 Umsätze erfassen</button>
+        <button class="btn tiny ghost" data-editmachine="${m.id}">Bearbeiten</button>
+        <button class="btn tiny ghost" data-edit-machine="${m.id}">Umsätze erfassen</button>
       </div>`}
     </li>`;
-  }).join("") || `<li class="hint">Noch keine Automaten erfasst. Nutze „+ Automat auf Karte setzen" oder „🔄 Jetzt aktualisieren" in den Einstellungen, um Automaten aus OpenStreetMap/farmshops zu laden.</li>`;
+  }).join("") || `<li class="hint">Noch keine Automaten erfasst. Nutze „+ Automat auf Karte setzen" oder „Jetzt aktualisieren" in den Einstellungen, um Automaten aus OpenStreetMap/farmshops zu laden.</li>`;
 
   $("#machines-list").querySelectorAll("[data-del-machine]").forEach((b) =>
     b.addEventListener("click", (e) => {
@@ -392,7 +392,7 @@ function renderDashboard() {
   );
   const c1 = $("#chart-season");
   if (c1.clientWidth) barChart(c1, monthLabels, monthly, {
-    color: "#22d3ee",
+    color: "#2f5d8a",
     format: (v) => fmtNum(v / 1000) + "k",
   });
 
@@ -414,7 +414,7 @@ function renderDashboard() {
   const cal = computeCalibration();
   const calText = cal.samples
     ? `Modell-Kalibrierung aktiv: Faktor ${cal.factor.toFixed(2)} aus ${cal.samples} Standort(en) mit Ist-Daten.`
-    : "Noch keine Kalibrierung – Ist-Umsätze bei den Standorten erfassen (📈), dann passt sich das Modell automatisch an.";
+    : "Noch keine Kalibrierung – Ist-Umsätze bei den Standorten erfassen, dann passt sich das Modell automatisch an.";
   if (fc) {
     const all = [...fc.actual, ...fc.forecast];
     const c3 = $("#chart-forecast");
@@ -423,7 +423,7 @@ function renderDashboard() {
         all.map((x) => x.month.slice(2).replace("-", "/")),
         all.map((x) => x.eur),
         {
-          colors: all.map((_, i) => (i < fc.actual.length ? "#22d3ee" : "#f59e0b")),
+          colors: all.map((_, i) => (i < fc.actual.length ? "#2f5d8a" : "#b07c4f")),
           format: (v) => fmtNum(v) + " €",
         });
     }
@@ -432,7 +432,7 @@ function renderDashboard() {
       `Prognose nächste ${fc.forecast.length} Monate (orange): ${fmtEur(fc.forecast.reduce((s, x) => s + x.eur, 0))}. ${calText}`;
   } else {
     $("#forecast-info").textContent =
-      "Für den Forecast mindestens 2 Monatsumsätze erfassen (📈 bei den eigenen Standorten oder per Telemetrie-API). " + calText;
+      "Für den Forecast mindestens 2 Monatsumsätze erfassen (bei den eigenen Standorten oder per Telemetrie-API). " + calText;
     const c3 = $("#chart-forecast");
     if (c3.clientWidth) c3.getContext("2d").clearRect(0, 0, c3.width, c3.height);
   }
@@ -510,11 +510,11 @@ function renderAndroidSection() {
   if (location.protocol === "file:") { el.innerHTML = ""; return; }
   el.innerHTML = `
     <div class="account-card">
-      <div class="who">📱 Android-App</div>
+      <div class="who">Android-App</div>
       <div class="lic">Diese Web-App ist auch als eigenständige Android-App verfügbar (offline nutzbar, im Konto synchronisiert wenn mit Server verbunden).</div>
       <div class="btn-row">
-        <a class="btn tiny" href="https://github.com/BlattTV/aris/actions/workflows/android-apk.yml" target="_blank" rel="noopener">⬇️ APK herunterladen</a>
-        <button class="btn tiny ghost" id="btn-install-pwa" style="display:none">📲 Als App installieren</button>
+        <a class="btn tiny" href="https://github.com/BlattTV/aris/actions/workflows/android-apk.yml" target="_blank" rel="noopener">APK herunterladen</a>
+        <button class="btn tiny ghost" id="btn-install-pwa" style="display:none">Als App installieren</button>
       </div>
     </div>`;
   const btn = $("#btn-install-pwa");
@@ -539,7 +539,7 @@ function renderAccountSection() {
   if (!user) {
     el.innerHTML = `<div class="account-card expired">
       <div class="who">Nicht angemeldet</div>
-      <button class="btn tiny" id="btn-show-login">🔑 Anmelden</button>
+      <button class="btn tiny" id="btn-show-login">Anmelden</button>
     </div>`;
     $("#btn-show-login").addEventListener("click", showAuthOverlay);
     return;
@@ -548,15 +548,15 @@ function renderAccountSection() {
   const until = lic.validUntil ? new Date(lic.validUntil).toLocaleDateString("de-DE") : "unbegrenzt";
   el.innerHTML = `
     <div class="account-card ${lic.valid ? "" : "expired"}">
-      <div class="who">👤 ${user.name} <span class="badge">${user.role === "admin" ? "Admin" : "Nutzer"}</span></div>
-      <div class="lic">${user.email} · Lizenz: ${lic.valid ? `✅ ${lic.plan || "aktiv"} bis ${until}` : `❌ ${lic.reason || "ungültig"}`}</div>
+      <div class="who">${user.name} <span class="badge">${user.role === "admin" ? "Admin" : "Nutzer"}</span></div>
+      <div class="lic">${user.email} · Lizenz: ${lic.valid ? `${lic.plan || "aktiv"} bis ${until}` : `${lic.reason || "ungültig"}`}</div>
       <div class="btn-row">
-        ${user.role === "admin" ? `<a class="btn tiny" href="admin.html">🛠️ Admin-Oberfläche</a>` : ""}
-        ${getServerStatus()?.payments ? `<button class="btn tiny" id="btn-buy">💳 Lizenz kaufen</button>` : ""}
-        <button class="btn tiny ghost" id="btn-redeem">🎟️ Lizenzschlüssel einlösen</button>
-        <button class="btn tiny ghost" id="btn-token">🔌 Telemetrie-Token</button>
-        <button class="btn tiny ghost" id="btn-passwd">🔒 Passwort ändern</button>
-        <button class="btn tiny ghost" id="btn-logout">🚪 Abmelden</button>
+        ${user.role === "admin" ? `<a class="btn tiny" href="admin.html">Administration</a>` : ""}
+        ${getServerStatus()?.payments ? `<button class="btn tiny" id="btn-buy">Lizenz kaufen</button>` : ""}
+        <button class="btn tiny ghost" id="btn-redeem">Lizenzschlüssel einlösen</button>
+        <button class="btn tiny ghost" id="btn-token">Telemetrie-Token</button>
+        <button class="btn tiny ghost" id="btn-passwd">Passwort ändern</button>
+        <button class="btn tiny ghost" id="btn-logout">Abmelden</button>
       </div>
     </div>`;
   $("#btn-buy")?.addEventListener("click", async () => {
@@ -630,13 +630,13 @@ async function renderTeamSection() {
   }
   const shares = await mySharedWith();
   el.innerHTML = `
-    <h3>👥 Team-Freigaben</h3>
+    <h3>Team-Freigaben</h3>
     <div class="sub">Dein Portfolio wird lesend geteilt mit:
       ${shares.length ? shares.map((s) => `<span class="badge">${s.email} <a href="#" data-unshare="${s.email}">✕</a></span>`).join(" ") : "niemandem"}.
-      Team-Standorte (👥) erscheinen auf deiner Karte, wenn andere ihr Portfolio mit dir teilen.</div>
+      Team-Standorte erscheinen auf deiner Karte, wenn andere ihr Portfolio mit dir teilen.</div>
     <div class="btn-row">
       <button class="btn tiny ghost" id="btn-share">+ Mit Konto teilen</button>
-      <button class="btn tiny ghost" id="btn-load-team">🔄 Team-Standorte laden (${state.teamMachines.length})</button>
+      <button class="btn tiny ghost" id="btn-load-team">Team-Standorte laden (${state.teamMachines.length})</button>
     </div>`;
   $("#btn-share").addEventListener("click", async () => {
     const email = prompt("E-Mail des Team-Mitglieds (muss ein Konto haben):");
@@ -650,7 +650,7 @@ async function renderTeamSection() {
   });
   $("#btn-load-team").addEventListener("click", async () => {
     const n = await loadTeamMachines();
-    alert(n ? `${n} Team-Standorte geladen (👥 auf der Karte).` : "Niemand teilt aktuell ein Portfolio mit dir.");
+    alert(n ? `${n} Team-Standorte geladen auf der Karte.` : "Niemand teilt aktuell ein Portfolio mit dir.");
     renderTeamSection();
   });
   el.querySelectorAll("[data-unshare]").forEach((a) =>
@@ -681,8 +681,8 @@ function renderSettingsPanel() {
   const srv = getServerStatus();
   const modeLine =
     getMode() === "server"
-      ? `🖥️ Server-Modus: Deutschland-Datenbestand vom ${srv?.updatedAt ? new Date(srv.updatedAt).toLocaleString("de-DE") : "– (erstes Update läuft)"} · ${fmtNum(srv?.machines || 0)} Automaten · ${fmtNum(srv?.regionalPois || 0)} Hofläden/Märkte · ${fmtNum(srv?.pois || 0)} Attraktionen · ${fmtNum(srv?.population || 0)} Orte`
-      : "🌐 Direkt-Modus (statisches Hosting): Daten werden je Kartenausschnitt live von der Overpass-API geladen.";
+      ? `Server-Modus: Deutschland-Datenbestand vom ${srv?.updatedAt ? new Date(srv.updatedAt).toLocaleString("de-DE") : "– (erstes Update läuft)"} · ${fmtNum(srv?.machines || 0)} Automaten · ${fmtNum(srv?.regionalPois || 0)} Hofläden/Märkte · ${fmtNum(srv?.pois || 0)} Attraktionen · ${fmtNum(srv?.population || 0)} Orte`
+      : "Direkt-Modus (statisches Hosting): Daten werden je Kartenausschnitt live von der Overpass-API geladen.";
   const localLine = state.lastRefresh
     ? `Zuletzt geladen: ${new Date(state.lastRefresh).toLocaleString("de-DE")} · ${fmtNum(state.overpassPois.length)} POIs, ${fmtNum(state.osmMachines.length)} Automaten, ${fmtNum(state.populationCenters.length)} Orte im Speicher · ${state.hiddenOsmIds.length} ausgeblendet`
     : "Noch keine Daten geladen.";
@@ -698,7 +698,7 @@ function bindGlobalActions() {
 
   $("#btn-add-machine").addEventListener("click", () => {
     setClickMode("addMachine", (latlng) => openMachineModal({ latlng }));
-    setDataStatus(`📍 Position des ${unit()}s auf der Karte anklicken …`);
+    setDataStatus(`Position des ${unit()}s auf der Karte anklicken …`);
   });
 
   $("#btn-add-attraction").addEventListener("click", () => {
@@ -738,7 +738,7 @@ function bindGlobalActions() {
     $("#btn-clear-route").style.display = "";
     $("#route-summary").innerHTML = `
       <div class="account-card">
-        <div class="who">🚚 Tour über ${own.length} Stopps</div>
+        <div class="who">Tour über ${own.length} Stopps</div>
         <div class="lic">${fmtNum(route.distanceKm, 1)} km · Fahrzeit ~${fmtNum(route.driveMin)} min ·
         Standzeit ~${fmtNum(route.serviceMin)} min · gesamt ~${fmtNum(route.totalMin / 60, 1)} h</div>
         <ol style="margin:4px 0 0 18px;padding:0;font-size:11.5px;color:var(--muted)">
@@ -800,7 +800,7 @@ function bindGlobalActions() {
   $("#btn-refresh-now").addEventListener("click", () => {
     refreshNow(map.getBounds()).then((res) => {
       if (res === "error")
-        setRefreshStatus("❌ Aktualisierung fehlgeschlagen – später erneut versuchen.");
+        setRefreshStatus("Aktualisierung fehlgeschlagen – später erneut versuchen.");
       else renderSettingsPanel();
     });
   });
@@ -812,7 +812,7 @@ function bindGlobalActions() {
     try {
       const hit = await geocode(q);
       if (!hit) {
-        setDataStatus("❓ Ort nicht gefunden");
+        setDataStatus("Ort nicht gefunden");
         return;
       }
       setDataStatus("");
@@ -821,7 +821,7 @@ function bindGlobalActions() {
       notify("selection");
       loadViewport(map.getBounds());
     } catch {
-      setDataStatus("⚠️ Suche fehlgeschlagen");
+      setDataStatus("Suche fehlgeschlagen");
     }
   };
   $("#btn-search").addEventListener("click", doSearch);
