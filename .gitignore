@@ -6,5 +6,7 @@ android/.gradle/
 android/build/
 android/app/build/
 android/local.properties
+# Gebündelte Web-App (wird beim Build aus dem Repo-Root kopiert)
+android/app/src/main/assets/web/
 
 node_modules/
